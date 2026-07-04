@@ -95,12 +95,19 @@ func (s *Service) JoinQueue(ctx context.Context, user *models.User, category, di
 		return nil, fmt.Errorf("invalid mode")
 	}
 
+	if active, err := s.duel.GetActiveMatchForUser(ctx, user.ID); err == nil && active != nil {
+		return &JoinResult{Match: active, InQueue: false}, nil
+	}
+
 	key := queueKey(category, difficulty, mode)
 	memberKey := fmt.Sprintf("queue:member:%s", user.ID.Hex())
 
 	exists, _ := s.rdb.Exists(ctx, memberKey).Result()
 	if exists > 0 {
-		return nil, fmt.Errorf("already in queue")
+		if active, err := s.duel.GetActiveMatchForUser(ctx, user.ID); err == nil && active != nil {
+			return &JoinResult{Match: active, InQueue: false}, nil
+		}
+		_ = s.LeaveQueue(ctx, user.ID.Hex())
 	}
 
 	rating := user.RatingDSA
@@ -143,7 +150,7 @@ func (s *Service) JoinQueue(ctx context.Context, user *models.User, category, di
 	}
 
 	result := &JoinResult{Queue: &entry, InQueue: true}
-	if match, err := s.duel.GetPendingMatch(ctx, user.ID.Hex()); err == nil && match != nil {
+	if match, err := s.duel.PeekPendingMatch(ctx, user.ID.Hex()); err == nil && match != nil {
 		result.Match = match
 		result.InQueue = false
 	}

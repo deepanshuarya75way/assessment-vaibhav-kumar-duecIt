@@ -63,12 +63,12 @@ type pistonRun struct {
 }
 
 type EvalResult struct {
-	PassedCount     int
-	TotalCount      int
-	WeightedScore   float64
-	ExecutionTimeMs int64
-	IsFullAC        bool
-	TestResults     []models.TestResult
+	PassedCount     int                 `json:"passedCount"`
+	TotalCount      int                 `json:"totalCount"`
+	WeightedScore   float64             `json:"weightedScore"`
+	ExecutionTimeMs int64               `json:"executionTimeMs"`
+	IsFullAC        bool                `json:"isFullAC"`
+	TestResults     []models.TestResult `json:"testResults,omitempty"`
 }
 
 func (s *Service) Evaluate(ctx context.Context, code, language string, testCases []models.TestCase) (*EvalResult, error) {

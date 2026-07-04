@@ -203,6 +203,16 @@ func (h *Handlers) GetPendingMatch(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, "Pending match", match)
 }
 
+func (h *Handlers) GetActiveMatch(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	match, err := h.Duel.GetActiveMatchForUser(r.Context(), user.ID)
+	if err != nil {
+		response.JSON(w, http.StatusOK, "No active match", nil)
+		return
+	}
+	response.JSON(w, http.StatusOK, "Active match", match)
+}
+
 func (h *Handlers) GetMatchDetails(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 	id, err := primitive.ObjectIDFromHex(chi.URLParam(r, "id"))
@@ -216,6 +226,21 @@ func (h *Handlers) GetMatchDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, "Match details", details)
+}
+
+func (h *Handlers) GetMatchResult(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	id, err := primitive.ObjectIDFromHex(chi.URLParam(r, "id"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid match id")
+		return
+	}
+	result, err := h.Duel.GetMatchResult(r.Context(), id, user.ID)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, "Match result", result)
 }
 
 func (h *Handlers) LeaveQueue(w http.ResponseWriter, r *http.Request) {
@@ -261,9 +286,9 @@ func (h *Handlers) GetMatch(w http.ResponseWriter, r *http.Request) {
 // --- Submission ---
 
 type codeReq struct {
-	Code         string `json:"code"`
-	Language     string `json:"language"`
-	PrevCodeLen  int    `json:"prevCodeLen"`
+	Code        string `json:"code"`
+	Language    string `json:"language"`
+	PrevCodeLen int    `json:"prevCodeLen"`
 }
 
 func (h *Handlers) RunCode(w http.ResponseWriter, r *http.Request) {

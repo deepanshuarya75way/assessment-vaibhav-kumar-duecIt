@@ -24,6 +24,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func main() {
@@ -58,8 +59,15 @@ func main() {
 	hub := ws.NewHub(authSvc)
 
 	duelMgr := duel.NewManager(db, probSvc, judgeSvc, eloSvc, hub, rdb)
+	hub.SetOnConnect(func(userID string) {
+		uid, err := primitive.ObjectIDFromHex(userID)
+		if err == nil {
+			duelMgr.OnUserConnected(uid)
+		}
+	})
 	mmSvc := matchmaking.NewService(cfg, rdb, probSvc, duelMgr, hub)
 	mmSvc.StartPoller(context.Background())
+	duelMgr.StartRecoveryPoller(context.Background())
 
 	h := &handlers.Handlers{
 		Auth: authSvc, Problems: probSvc,
@@ -102,7 +110,9 @@ func main() {
 				mr.Post("/queue/leave", h.LeaveQueue)
 				mr.Get("/queue/status", h.QueueStatus)
 				mr.Get("/pending", h.GetPendingMatch)
+				mr.Get("/active", h.GetActiveMatch)
 				mr.Get("/{id}/details", h.GetMatchDetails)
+				mr.Get("/{id}/result", h.GetMatchResult)
 				mr.Get("/{id}", h.GetMatch)
 			})
 

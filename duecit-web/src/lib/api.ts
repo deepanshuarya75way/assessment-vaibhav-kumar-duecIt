@@ -103,8 +103,17 @@ export const api = {
   getPendingMatch: () =>
     request<Record<string, unknown> | null>('/api/match/pending'),
 
+  getActiveMatch: () =>
+    request<Record<string, unknown> | null>('/api/match/active'),
+
+  getQueueStatus: () =>
+    request<{ entry: Record<string, unknown>; position: number }>('/api/match/queue/status'),
+
   getMatchDetails: (id: string) =>
     request<Record<string, unknown>>(`/api/match/${id}/details`),
+
+  getMatchResult: (id: string) =>
+    request<Record<string, unknown>>(`/api/match/${id}/result`),
 
   getMatch: (id: string) => request(`/api/match/${id}`),
 

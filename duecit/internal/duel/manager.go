@@ -43,18 +43,18 @@ func NewManager(db *mongo.Database, prob *problems.Service, j *judge.Service, e 
 }
 
 type CreateMatchInput struct {
-	PlayerA, PlayerB   primitive.ObjectID
-	Problem            *models.Problem
-	Category           string
-	Difficulty         string
-	Mode               string
-	Language           string
-	ReadPhaseSec       int
-	CodingPhaseSec     int
-	PlayerAName        string
-	PlayerARating      int
-	PlayerBName        string
-	PlayerBRating      int
+	PlayerA, PlayerB primitive.ObjectID
+	Problem          *models.Problem
+	Category         string
+	Difficulty       string
+	Mode             string
+	Language         string
+	ReadPhaseSec     int
+	CodingPhaseSec   int
+	PlayerAName      string
+	PlayerARating    int
+	PlayerBName      string
+	PlayerBRating    int
 }
 
 type OpponentInfo struct {
@@ -64,17 +64,17 @@ type OpponentInfo struct {
 }
 
 type MatchFoundPayload struct {
-	MatchID        string              `json:"matchId"`
-	YourRole       string              `json:"yourRole"`
+	MatchID        string               `json:"matchId"`
+	YourRole       string               `json:"yourRole"`
 	Problem        models.ProblemPublic `json:"problem"`
-	Opponent       OpponentInfo        `json:"opponent"`
-	Mode           string              `json:"mode"`
-	Language       string              `json:"language"`
-	ServerTime     int64               `json:"serverTime"`
-	CodingStartsAt int64               `json:"codingStartsAt"`
-	CodingEndsAt   int64               `json:"codingEndsAt"`
-	ReadPhaseSec   int                 `json:"readPhaseSec"`
-	CodingPhaseSec int                 `json:"codingPhaseSec"`
+	Opponent       OpponentInfo         `json:"opponent"`
+	Mode           string               `json:"mode"`
+	Language       string               `json:"language"`
+	ServerTime     int64                `json:"serverTime"`
+	CodingStartsAt int64                `json:"codingStartsAt"`
+	CodingEndsAt   int64                `json:"codingEndsAt"`
+	ReadPhaseSec   int                  `json:"readPhaseSec"`
+	CodingPhaseSec int                  `json:"codingPhaseSec"`
 }
 
 func (m *Manager) CreateMatch(ctx context.Context, in CreateMatchInput) (*models.Match, error) {
@@ -127,14 +127,14 @@ func (m *Manager) CreateMatch(ctx context.Context, in CreateMatchInput) (*models
 	payloadA := MatchFoundPayload{
 		MatchID: matchID, YourRole: "playerA", Problem: pub,
 		Opponent: OpponentInfo{UserID: in.PlayerB.Hex(), Username: in.PlayerBName, Rating: in.PlayerBRating},
-		Mode: in.Mode, Language: in.Language,
+		Mode:     in.Mode, Language: in.Language,
 		ServerTime: serverTime, CodingStartsAt: codingStarts.UnixMilli(), CodingEndsAt: codingEnds.UnixMilli(),
 		ReadPhaseSec: in.ReadPhaseSec, CodingPhaseSec: in.CodingPhaseSec,
 	}
 	payloadB := MatchFoundPayload{
 		MatchID: matchID, YourRole: "playerB", Problem: pub,
 		Opponent: OpponentInfo{UserID: in.PlayerA.Hex(), Username: in.PlayerAName, Rating: in.PlayerARating},
-		Mode: in.Mode, Language: in.Language,
+		Mode:     in.Mode, Language: in.Language,
 		ServerTime: serverTime, CodingStartsAt: codingStarts.UnixMilli(), CodingEndsAt: codingEnds.UnixMilli(),
 		ReadPhaseSec: in.ReadPhaseSec, CodingPhaseSec: in.CodingPhaseSec,
 	}
@@ -152,20 +152,36 @@ func (m *Manager) CreateMatch(ctx context.Context, in CreateMatchInput) (*models
 
 func (m *Manager) schedulePhases(matchID primitive.ObjectID, readSec, codingSec int) {
 	time.Sleep(time.Duration(readSec) * time.Second)
+	ctx := context.Background()
+	match, err := m.GetMatch(ctx, matchID)
+	if err != nil || match.Status == models.MatchStatusFinished {
+		return
+	}
+
 	mid := matchID.Hex()
-	m.hub.EmitToMatch(mid, "match:coding_start", map[string]interface{}{
+	codingEndsAt := time.Now().Add(time.Duration(codingSec) * time.Second).UnixMilli()
+	payload := map[string]interface{}{
 		"matchId":      mid,
 		"serverTime":   time.Now().UnixMilli(),
-		"codingEndsAt": time.Now().Add(time.Duration(codingSec) * time.Second).UnixMilli(),
-	})
-	ctx := context.Background()
+		"codingEndsAt": codingEndsAt,
+	}
+	m.emitToMatchPlayers(match, "match:coding_start", payload)
+
 	m.matches.UpdateOne(ctx, bson.M{"_id": matchID}, bson.M{"$set": bson.M{
-		"phase":     models.PhaseCoding,
-		"updatedAt": time.Now(),
+		"phase":        models.PhaseCoding,
+		"codingEndsAt": time.UnixMilli(codingEndsAt),
+		"updatedAt":    time.Now(),
 	}})
 
 	time.Sleep(time.Duration(codingSec) * time.Second)
 	m.finalizeByTimeout(ctx, matchID)
+}
+
+func (m *Manager) emitToMatchPlayers(match *models.Match, eventType string, data interface{}) {
+	mid := match.ID.Hex()
+	m.hub.EmitToMatch(mid, eventType, data)
+	m.hub.EmitToUser(match.PlayerA.Hex(), eventType, data)
+	m.hub.EmitToUser(match.PlayerB.Hex(), eventType, data)
 }
 
 func (m *Manager) GetMatch(ctx context.Context, id primitive.ObjectID) (*models.Match, error) {
@@ -289,6 +305,14 @@ func (m *Manager) SubmitCode(ctx context.Context, matchID, userID primitive.Obje
 		"totalCount":  result.TotalCount,
 		"isFullAC":    result.IsFullAC,
 	})
+	m.hub.EmitToUser(match.PlayerA.Hex(), "submission:progress", map[string]interface{}{
+		"userId": userID.Hex(), "passedCount": result.PassedCount,
+		"totalCount": result.TotalCount, "isFullAC": result.IsFullAC,
+	})
+	m.hub.EmitToUser(match.PlayerB.Hex(), "submission:progress", map[string]interface{}{
+		"userId": userID.Hex(), "passedCount": result.PassedCount,
+		"totalCount": result.TotalCount, "isFullAC": result.IsFullAC,
+	})
 
 	finished := m.checkBothSubmitted(ctx, matchID)
 
@@ -338,6 +362,13 @@ type PlayerResult struct {
 	NewRating    int     `json:"newRating"`
 }
 
+type MatchResult struct {
+	Draw   bool          `json:"draw"`
+	Reason string        `json:"reason,omitempty"`
+	Winner *PlayerResult `json:"winner,omitempty"`
+	Loser  *PlayerResult `json:"loser,omitempty"`
+}
+
 func (m *Manager) finalizeMatch(ctx context.Context, matchID primitive.ObjectID) bool {
 	match, err := m.GetMatch(ctx, matchID)
 	if err != nil || match.Status == models.MatchStatusFinished {
@@ -357,9 +388,10 @@ func (m *Manager) finalizeMatch(ctx context.Context, matchID primitive.ObjectID)
 		match.Phase = models.PhaseFinished
 		match.IsDraw = true
 		m.matches.UpdateOne(ctx, bson.M{"_id": matchID}, bson.M{"$set": match})
-		m.hub.EmitToMatch(matchID.Hex(), "match:finished", map[string]interface{}{
-			"draw": true, "reason": "timeout",
-		})
+		result := MatchResult{Draw: true, Reason: "timeout"}
+		m.emitToMatchPlayers(match, "match:finished", result)
+		m.clearUserQueueState(ctx, match.PlayerA.Hex())
+		m.clearUserQueueState(ctx, match.PlayerB.Hex())
 		return true
 	}
 
@@ -445,23 +477,49 @@ func (m *Manager) finalizeMatch(ctx context.Context, matchID primitive.ObjectID)
 	wUsername := wRes.Username
 	lUsername := lRes.Username
 
-	m.hub.EmitToMatch(matchID.Hex(), "match:finished", map[string]interface{}{
-		"draw": isDraw,
-		"winner": PlayerResult{
+	result := MatchResult{
+		Draw: isDraw,
+		Winner: &PlayerResult{
 			UserID: winnerID.Hex(), Username: wUsername,
 			Code: wSub.Code, Language: wSub.Language,
 			Score: wSub.WeightedScore, SolveTimeMs: wSub.SolveTimeMs,
 			RatingChange: wRes.Change, NewRating: wRes.NewRating,
 		},
-		"loser": PlayerResult{
+		Loser: &PlayerResult{
 			UserID: loserID.Hex(), Username: lUsername,
 			Code: lSub.Code, Language: lSub.Language,
 			Score: lSub.WeightedScore, SolveTimeMs: lSub.SolveTimeMs,
 			RatingChange: lRes.Change, NewRating: lRes.NewRating,
 		},
-	})
+	}
+	m.emitToMatchPlayers(match, "match:finished", result)
+	m.clearUserQueueState(ctx, match.PlayerA.Hex())
+	m.clearUserQueueState(ctx, match.PlayerB.Hex())
 
 	return true
+}
+
+func (m *Manager) clearUserQueueState(ctx context.Context, userID string) {
+	memberKey := fmt.Sprintf("queue:member:%s", userID)
+	data, err := m.rdb.Get(ctx, memberKey).Bytes()
+	if err != nil {
+		return
+	}
+	var entry struct {
+		Category   string `json:"category"`
+		Difficulty string `json:"difficulty"`
+		Mode       string `json:"mode"`
+	}
+	if json.Unmarshal(data, &entry) != nil {
+		m.rdb.Del(ctx, memberKey, fmt.Sprintf("queue:data:%s", userID))
+		return
+	}
+	key := fmt.Sprintf("queue:%s:%s:%s", entry.Category, entry.Difficulty, entry.Mode)
+	pipe := m.rdb.Pipeline()
+	pipe.ZRem(ctx, key, userID)
+	pipe.Del(ctx, memberKey)
+	pipe.Del(ctx, fmt.Sprintf("queue:data:%s", userID))
+	pipe.Exec(ctx)
 }
 
 func (m *Manager) isPlayer(match *models.Match, userID primitive.ObjectID) bool {
@@ -477,8 +535,8 @@ func (m *Manager) storePendingMatch(ctx context.Context, userID string, payload 
 	m.rdb.Set(ctx, "pending:match:"+userID, data, 15*time.Minute)
 }
 
-func (m *Manager) GetPendingMatch(ctx context.Context, userID string) (*MatchFoundPayload, error) {
-	data, err := m.rdb.GetDel(ctx, "pending:match:"+userID).Bytes()
+func (m *Manager) PeekPendingMatch(ctx context.Context, userID string) (*MatchFoundPayload, error) {
+	data, err := m.rdb.Get(ctx, "pending:match:"+userID).Bytes()
 	if err != nil {
 		return nil, err
 	}
@@ -489,6 +547,14 @@ func (m *Manager) GetPendingMatch(ctx context.Context, userID string) (*MatchFou
 	return &payload, nil
 }
 
+func (m *Manager) ClearPendingMatch(ctx context.Context, userID string) {
+	m.rdb.Del(ctx, "pending:match:"+userID)
+}
+
+func (m *Manager) GetPendingMatch(ctx context.Context, userID string) (*MatchFoundPayload, error) {
+	return m.PeekPendingMatch(ctx, userID)
+}
+
 type MatchDetails struct {
 	MatchID        string               `json:"matchId"`
 	YourRole       string               `json:"yourRole"`
@@ -497,6 +563,8 @@ type MatchDetails struct {
 	Mode           string               `json:"mode"`
 	Language       string               `json:"language"`
 	Phase          string               `json:"phase"`
+	Status         string               `json:"status"`
+	HasSubmitted   bool                 `json:"hasSubmitted"`
 	ServerTime     int64                `json:"serverTime"`
 	CodingStartsAt int64                `json:"codingStartsAt"`
 	CodingEndsAt   int64                `json:"codingEndsAt"`
@@ -536,6 +604,18 @@ func (m *Manager) GetMatchDetails(ctx context.Context, matchID, userID primitive
 	}
 
 	now := time.Now()
+	phase := match.Phase
+	if match.Status == models.MatchStatusFinished {
+		phase = models.PhaseFinished
+	} else if match.Status == models.MatchStatusActive {
+		if match.CodingEndsAt != nil && now.After(*match.CodingEndsAt) {
+			go m.finalizeByTimeout(context.Background(), matchID)
+			phase = models.PhaseFinished
+		} else if match.CodingStartsAt != nil && now.After(*match.CodingStartsAt) && phase == models.PhaseReading {
+			phase = models.PhaseCoding
+		}
+	}
+
 	codingStarts := int64(0)
 	codingEnds := int64(0)
 	if match.CodingStartsAt != nil {
@@ -545,6 +625,11 @@ func (m *Manager) GetMatchDetails(ctx context.Context, matchID, userID primitive
 		codingEnds = match.CodingEndsAt.UnixMilli()
 	}
 
+	subCount, _ := m.submissions.CountDocuments(ctx, bson.M{"matchId": matchID, "userId": userID})
+
+	m.hub.JoinMatchRoom(userID.Hex(), match.ID.Hex())
+	m.ClearPendingMatch(ctx, userID.Hex())
+
 	return &MatchDetails{
 		MatchID:        match.ID.Hex(),
 		YourRole:       role,
@@ -552,7 +637,9 @@ func (m *Manager) GetMatchDetails(ctx context.Context, matchID, userID primitive
 		Opponent:       OpponentInfo{UserID: opponent.ID.Hex(), Username: opponent.Username, Rating: rating},
 		Mode:           match.Mode,
 		Language:       match.Language,
-		Phase:          match.Phase,
+		Phase:          phase,
+		Status:         match.Status,
+		HasSubmitted:   subCount > 0,
 		ServerTime:     now.UnixMilli(),
 		CodingStartsAt: codingStarts,
 		CodingEndsAt:   codingEnds,
@@ -561,17 +648,237 @@ func (m *Manager) GetMatchDetails(ctx context.Context, matchID, userID primitive
 	}, nil
 }
 
+func (m *Manager) GetActiveMatchForUser(ctx context.Context, userID primitive.ObjectID) (*MatchFoundPayload, error) {
+	var match models.Match
+	err := m.matches.FindOne(ctx, bson.M{
+		"status": models.MatchStatusActive,
+		"$or": []bson.M{
+			{"playerA": userID},
+			{"playerB": userID},
+		},
+	}, options.FindOne().SetSort(bson.D{{Key: "startTime", Value: -1}})).Decode(&match)
+	if err != nil {
+		return nil, err
+	}
+
+	details, err := m.buildMatchFoundPayload(ctx, &match, userID)
+	if err != nil {
+		return nil, err
+	}
+	return details, nil
+}
+
+func (m *Manager) buildMatchFoundPayload(ctx context.Context, match *models.Match, userID primitive.ObjectID) (*MatchFoundPayload, error) {
+	problem, err := m.problems.GetProblem(ctx, match.ProblemID)
+	if err != nil {
+		return nil, err
+	}
+
+	role := "playerB"
+	opponentID := match.PlayerA
+	if userID == match.PlayerA {
+		role = "playerA"
+		opponentID = match.PlayerB
+	}
+
+	var opponent models.User
+	if err := m.users.FindOne(ctx, bson.M{"_id": opponentID}).Decode(&opponent); err != nil {
+		return nil, err
+	}
+
+	rating := opponent.RatingDSA
+	if match.Category == models.CategoryDB {
+		rating = opponent.RatingDB
+	}
+
+	codingStarts := int64(0)
+	codingEnds := int64(0)
+	if match.CodingStartsAt != nil {
+		codingStarts = match.CodingStartsAt.UnixMilli()
+	}
+	if match.CodingEndsAt != nil {
+		codingEnds = match.CodingEndsAt.UnixMilli()
+	}
+
+	return &MatchFoundPayload{
+		MatchID:        match.ID.Hex(),
+		YourRole:       role,
+		Problem:        problem.ToPublic(),
+		Opponent:       OpponentInfo{UserID: opponent.ID.Hex(), Username: opponent.Username, Rating: rating},
+		Mode:           match.Mode,
+		Language:       match.Language,
+		ServerTime:     time.Now().UnixMilli(),
+		CodingStartsAt: codingStarts,
+		CodingEndsAt:   codingEnds,
+		ReadPhaseSec:   match.ReadPhaseSec,
+		CodingPhaseSec: match.CodingPhaseSec,
+	}, nil
+}
+
+func (m *Manager) OnUserConnected(userID primitive.ObjectID) {
+	ctx := context.Background()
+	match, err := m.GetActiveMatchForUser(ctx, userID)
+	if err != nil || match == nil {
+		return
+	}
+	m.hub.JoinMatchRoom(userID.Hex(), match.MatchID)
+}
+
+func (m *Manager) StartRecoveryPoller(ctx context.Context) {
+	go func() {
+		m.recoverActiveMatches(context.Background())
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				m.recoverActiveMatches(context.Background())
+			}
+		}
+	}()
+}
+
+func (m *Manager) recoverActiveMatches(ctx context.Context) {
+	cur, err := m.matches.Find(ctx, bson.M{"status": models.MatchStatusActive})
+	if err != nil {
+		return
+	}
+	defer cur.Close(ctx)
+
+	for cur.Next(ctx) {
+		var match models.Match
+		if err := cur.Decode(&match); err != nil {
+			continue
+		}
+		now := time.Now()
+		if match.CodingEndsAt != nil && now.After(*match.CodingEndsAt) {
+			m.finalizeByTimeout(ctx, match.ID)
+			continue
+		}
+		if match.CodingStartsAt != nil && now.After(*match.CodingStartsAt) && match.Phase == models.PhaseReading {
+			m.matches.UpdateOne(ctx, bson.M{"_id": match.ID}, bson.M{"$set": bson.M{
+				"phase":     models.PhaseCoding,
+				"updatedAt": now,
+			}})
+			payload := map[string]interface{}{
+				"matchId":      match.ID.Hex(),
+				"serverTime":   now.UnixMilli(),
+				"codingEndsAt": match.CodingEndsAt.UnixMilli(),
+			}
+			m.emitToMatchPlayers(&match, "match:coding_start", payload)
+		}
+	}
+}
+
+func (m *Manager) GetMatchResult(ctx context.Context, matchID, userID primitive.ObjectID) (*MatchResult, error) {
+	match, err := m.GetMatch(ctx, matchID)
+	if err != nil {
+		return nil, err
+	}
+	if match.PlayerA != userID && match.PlayerB != userID {
+		return nil, fmt.Errorf("not in match")
+	}
+	if match.Status != models.MatchStatusFinished {
+		return nil, fmt.Errorf("match not finished")
+	}
+	if match.IsDraw && match.Winner == nil {
+		return &MatchResult{Draw: true, Reason: "timeout"}, nil
+	}
+
+	cur, err := m.submissions.Find(ctx, bson.M{"matchId": matchID})
+	if err != nil {
+		return nil, err
+	}
+	var subs []models.Submission
+	_ = cur.All(ctx, &subs)
+	cur.Close(ctx)
+
+	best := map[string]models.Submission{}
+	for _, s := range subs {
+		key := s.UserID.Hex()
+		if existing, ok := best[key]; !ok || s.WeightedScore > existing.WeightedScore ||
+			(s.WeightedScore == existing.WeightedScore && s.SolveTimeMs < existing.SolveTimeMs) {
+			best[key] = s
+		}
+	}
+
+	playerA, err := m.getUser(ctx, match.PlayerA)
+	if err != nil {
+		return nil, err
+	}
+	playerB, err := m.getUser(ctx, match.PlayerB)
+	if err != nil {
+		return nil, err
+	}
+
+	winnerID := match.PlayerA
+	loserID := match.PlayerB
+	if match.Winner != nil {
+		winnerID = *match.Winner
+		if winnerID == match.PlayerA {
+			loserID = match.PlayerB
+		} else {
+			loserID = match.PlayerA
+		}
+	}
+
+	winner := playerA
+	loser := playerB
+	if winnerID == match.PlayerB {
+		winner = playerB
+		loser = playerA
+	}
+
+	wSub := best[winnerID.Hex()]
+	lSub := best[loserID.Hex()]
+	wRating, lRating := winner.RatingDSA, loser.RatingDSA
+	if match.Category == models.CategoryDB {
+		wRating, lRating = winner.RatingDB, loser.RatingDB
+	}
+
+	wChange, lChange := match.RatingChanges.PlayerA, match.RatingChanges.PlayerB
+	if winnerID == match.PlayerB {
+		wChange, lChange = match.RatingChanges.PlayerB, match.RatingChanges.PlayerA
+	}
+
+	return &MatchResult{
+		Draw: match.IsDraw,
+		Winner: &PlayerResult{
+			UserID: winnerID.Hex(), Username: winner.Username,
+			Code: wSub.Code, Language: wSub.Language,
+			Score: wSub.WeightedScore, SolveTimeMs: wSub.SolveTimeMs,
+			RatingChange: wChange, NewRating: wRating,
+		},
+		Loser: &PlayerResult{
+			UserID: loserID.Hex(), Username: loser.Username,
+			Code: lSub.Code, Language: lSub.Language,
+			Score: lSub.WeightedScore, SolveTimeMs: lSub.SolveTimeMs,
+			RatingChange: lChange, NewRating: lRating,
+		},
+	}, nil
+}
+
+func (m *Manager) getUser(ctx context.Context, userID primitive.ObjectID) (*models.User, error) {
+	var user models.User
+	if err := m.users.FindOne(ctx, bson.M{"_id": userID}).Decode(&user); err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 type MatchHistoryEntry struct {
-	MatchID    string    `json:"matchId"`
-	ProblemID  string    `json:"problemId"`
-	Category   string    `json:"category"`
-	Difficulty string    `json:"difficulty"`
-	Mode       string    `json:"mode"`
-	Status     string    `json:"status"`
-	Phase      string    `json:"phase"`
-	Won        *bool     `json:"won,omitempty"`
-	IsDraw     bool      `json:"isDraw"`
-	StartTime  time.Time `json:"startTime"`
+	MatchID    string     `json:"matchId"`
+	ProblemID  string     `json:"problemId"`
+	Category   string     `json:"category"`
+	Difficulty string     `json:"difficulty"`
+	Mode       string     `json:"mode"`
+	Status     string     `json:"status"`
+	Phase      string     `json:"phase"`
+	Won        *bool      `json:"won,omitempty"`
+	IsDraw     bool       `json:"isDraw"`
+	StartTime  time.Time  `json:"startTime"`
 	EndTime    *time.Time `json:"endTime,omitempty"`
 }
 

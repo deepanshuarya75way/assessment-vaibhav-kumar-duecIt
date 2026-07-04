@@ -24,10 +24,15 @@ type Client struct {
 }
 
 type Hub struct {
-	mu      sync.RWMutex
-	clients map[string]*Client
-	rooms   map[string]map[string]*Client
-	auth    *auth.Service
+	mu        sync.RWMutex
+	clients   map[string]*Client
+	rooms     map[string]map[string]*Client
+	auth      *auth.Service
+	onConnect func(userID string)
+}
+
+func (h *Hub) SetOnConnect(fn func(userID string)) {
+	h.onConnect = fn
 }
 
 func NewHub(authSvc *auth.Service) *Hub {
@@ -127,6 +132,10 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	h.clients[client.UserID] = client
 	h.mu.Unlock()
+
+	if h.onConnect != nil {
+		h.onConnect(client.UserID)
+	}
 
 	go client.writePump()
 	go client.readPump()

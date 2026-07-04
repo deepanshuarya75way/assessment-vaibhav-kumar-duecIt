@@ -83,6 +83,24 @@ export default function ProblemPanel({
         <pre className="whitespace-pre-wrap font-mono text-xs bg-[#f8f8f8] border border-[#ddd] p-2">{constraints}</pre>
       </Section>
 
+      <Section title="How to Write Your Solution">
+        <div className="text-xs leading-relaxed space-y-2 bg-[#fff8e6] border border-[#f0d080] p-3">
+          <p>
+            Read input from <strong>stdin</strong> and write output to <strong>stdout</strong>.
+            Do not print prompts, labels, or extra text — only the required output.
+          </p>
+          <p>
+            <strong>Python 3 example</strong> (for problems with <code>n</code> on line 1, numbers on line 2):
+          </p>
+          <pre className="whitespace-pre-wrap font-mono text-xs bg-[#f8f8f8] border border-[#ddd] p-2">{`n = int(input())
+arr = list(map(int, input().split()))
+print(max(arr))  # replace with your logic`}</pre>
+          <p className="text-[var(--cf-muted)]">
+            Use &quot;Run Samples&quot; to test against the examples before submitting.
+          </p>
+        </div>
+      </Section>
+
       <Section title="Examples">
         {samples.map((s, i) => (
           <div key={i} className="mb-3">

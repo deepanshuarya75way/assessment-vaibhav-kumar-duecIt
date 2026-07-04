@@ -80,9 +80,47 @@ export default function DuelPage() {
     loadStarterCode(language, m.problem);
 
     const now = Date.now();
-    if (now >= m.codingStartsAt) setPhase('coding');
-    else if ((data.phase as string) === 'coding') setPhase('coding');
+    const status = data.status as string | undefined;
+    const serverPhase = data.phase as string;
+    if (status === 'finished' || serverPhase === 'finished') {
+      setPhase('finished');
+    } else if (now >= m.codingStartsAt || serverPhase === 'coding') {
+      setPhase('coding');
+    } else {
+      setPhase('reading');
+    }
+
+    if (data.hasSubmitted) {
+      setSubmitted(true);
+      setRunResult('Submitted — waiting for opponent or timeout...');
+    }
   }, [language, loadStarterCode]);
+
+  const fetchMatchResult = useCallback(async () => {
+    try {
+      const result = await api.getMatchResult(matchId);
+      setResults(result);
+      setPhase('finished');
+      setRunResult('Match completed.');
+      sessionStorage.removeItem(`match:${matchId}`);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [matchId]);
+
+  const syncMatchDetails = useCallback(async () => {
+    try {
+      const details = await api.getMatchDetails(matchId);
+      if (!details) return;
+      initMatch(details as Record<string, unknown>);
+      sessionStorage.setItem(`match:${matchId}`, JSON.stringify(details));
+      const d = details as Record<string, unknown>;
+      if (d.status === 'finished' || d.phase === 'finished') {
+        await fetchMatchResult();
+      }
+    } catch { /* ignore */ }
+  }, [matchId, initMatch, fetchMatchResult]);
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');
@@ -98,7 +136,6 @@ export default function DuelPage() {
       if (stored) {
         try {
           initMatch(JSON.parse(stored));
-          return;
         } catch { /* fall through */ }
       }
       try {
@@ -106,6 +143,10 @@ export default function DuelPage() {
         if (details) {
           initMatch(details as Record<string, unknown>);
           sessionStorage.setItem(`match:${matchId}`, JSON.stringify(details));
+          if ((details as Record<string, unknown>).phase === 'finished' ||
+              (details as Record<string, unknown>).status === 'finished') {
+            await fetchMatchResult();
+          }
         }
       } catch { /* waiting for ws */ }
     };
@@ -136,6 +177,8 @@ export default function DuelPage() {
     const unsubFinished = wsClient.on('match:finished', (data) => {
       setPhase('finished');
       setResults(data);
+      setRunResult('Match completed.');
+      sessionStorage.removeItem(`match:${matchId}`);
     });
 
     return () => {
@@ -144,7 +187,29 @@ export default function DuelPage() {
       unsubProgress();
       unsubFinished();
     };
-  }, [user, matchId, initMatch]);
+  }, [user, matchId, initMatch, fetchMatchResult]);
+
+  useEffect(() => {
+    if (!match || phase === 'finished') return;
+    const id = setInterval(() => {
+      syncMatchDetails().catch(() => {});
+    }, 5000);
+    return () => clearInterval(id);
+  }, [match, phase, syncMatchDetails]);
+
+  useEffect(() => {
+    if (phase !== 'finished' && !results && match && Date.now() >= match.codingEndsAt) {
+      fetchMatchResult().catch(() => {});
+    }
+  }, [phase, results, match, fetchMatchResult]);
+
+  useEffect(() => {
+    if (!submitted || results || phase === 'finished') return;
+    const id = setInterval(() => {
+      fetchMatchResult().catch(() => {});
+    }, 2000);
+    return () => clearInterval(id);
+  }, [submitted, results, fetchMatchResult]);
 
   const handleLanguageChange = (lang: string) => {
     setLanguage(lang);
@@ -164,9 +229,12 @@ export default function DuelPage() {
     setRunResult('Running...');
     try {
       const result = await api.runCode(matchId, code, language) as {
-        passedCount: number; totalCount: number;
+        passedCount?: number; totalCount?: number;
+        PassedCount?: number; TotalCount?: number;
       };
-      setRunResult(`${result.passedCount}/${result.totalCount} samples passed`);
+      const passed = result.passedCount ?? result.PassedCount ?? 0;
+      const total = result.totalCount ?? result.TotalCount ?? 0;
+      setRunResult(`${passed}/${total} samples passed`);
     } catch (err) {
       setRunResult(err instanceof Error ? err.message : 'Run failed');
     }
@@ -182,7 +250,10 @@ export default function DuelPage() {
       prevCodeLen.current = getCodeLength(code);
       setSubmitted(true);
       setRunResult('Submitted — waiting for opponent or timeout...');
-      if (result.matchFinished) setPhase('finished');
+      if (result.matchFinished) {
+        setRunResult('Match completed. Loading results...');
+        await fetchMatchResult();
+      }
     } catch (err) {
       setRunResult(err instanceof Error ? err.message : 'Submit failed');
     } finally {
@@ -198,6 +269,21 @@ export default function DuelPage() {
         <AppNav />
         <ResultsView results={results} onBack={() => router.push('/dashboard')} />
       </>
+    );
+  }
+
+  if (phase === 'finished' && !results) {
+    return (
+      <div className="min-h-screen">
+        <AppNav />
+        <div className="flex flex-col items-center justify-center gap-4 p-12">
+          <div className="text-[var(--cf-blue)] font-bold">Match completed. Loading results...</div>
+          <button onClick={() => fetchMatchResult()} className="cf-btn px-4 py-2">
+            Refresh Result
+          </button>
+          <Link href="/dashboard" className="text-[var(--cf-blue)] underline text-sm">Back to Dashboard</Link>
+        </div>
+      </div>
     );
   }
 
@@ -244,6 +330,10 @@ export default function DuelPage() {
                 serverTime={match.serverTime}
                 targetTime={match.codingEndsAt}
                 label="Code"
+                onExpire={() => {
+                  setRunResult('Code time ended. Waiting for result...');
+                  fetchMatchResult().catch(() => {});
+                }}
               />
             )}
             {tabWarnings > 0 && (

@@ -148,10 +148,18 @@ func (s *Service) CountProblems(ctx context.Context) (int64, error) {
 
 func defaultStarterCode() map[string]string {
 	return map[string]string{
-		"python":     "# Write your solution here\n",
-		"javascript": "// Write your solution here\n",
-		"cpp":        "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // Write your solution here\n    return 0;\n}\n",
-		"java":       "public class Main {\n    public static void main(String[] args) {\n        // Write your solution here\n    }\n}\n",
-		"go":         "package main\n\nimport \"fmt\"\n\nfunc main() {\n    // Write your solution here\n}\n",
+		"python": `# Read from stdin, write to stdout (no extra text)
+# Example for n + list input:
+# n = int(input())
+# arr = list(map(int, input().split()))
+# print(result)
+`,
+		"javascript": `const fs = require('fs');
+const input = fs.readFileSync(0, 'utf8').trim().split(/\\s+/);
+// Write your solution here — use input tokens, print only the answer
+`,
+		"cpp":        "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // Read from cin, write to cout — no extra text\n    return 0;\n}\n",
+		"java":       "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Read from sc, print only the required output\n    }\n}\n",
+		"go":         "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n)\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\t_ = reader\n\t// Read from stdin, fmt.Println only the answer\n}\n",
 	}
 }

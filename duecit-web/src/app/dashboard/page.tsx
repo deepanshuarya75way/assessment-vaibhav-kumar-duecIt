@@ -36,6 +36,29 @@ export default function DashboardPage() {
     const token = localStorage.getItem('accessToken');
     if (token) wsClient.connect(token).catch(() => {});
 
+    const restoreSession = async () => {
+      try {
+        const active = await api.getActiveMatch();
+        if (active?.matchId) {
+          goToMatch(router, active as Record<string, unknown>);
+          return;
+        }
+      } catch { /* no active match */ }
+      try {
+        const pending = await api.getPendingMatch();
+        if (pending?.matchId) {
+          goToMatch(router, pending as Record<string, unknown>);
+          return;
+        }
+      } catch { /* no pending match */ }
+      try {
+        await api.getQueueStatus();
+        setInQueue(true);
+        setQueueMsg('Searching for opponent...');
+      } catch { /* not in queue */ }
+    };
+    restoreSession();
+
     const unsubFound = wsClient.on('match:found', (data) => {
       setInQueue(false);
       goToMatch(router, data);

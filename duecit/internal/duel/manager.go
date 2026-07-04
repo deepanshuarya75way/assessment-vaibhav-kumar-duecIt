@@ -592,7 +592,7 @@ func (m *Manager) GetUserMatchHistory(ctx context.Context, userID primitive.Obje
 	}
 	defer cur.Close(ctx)
 
-	var entries []MatchHistoryEntry
+	entries := make([]MatchHistoryEntry, 0)
 	for cur.Next(ctx) {
 		var match models.Match
 		if err := cur.Decode(&match); err != nil {

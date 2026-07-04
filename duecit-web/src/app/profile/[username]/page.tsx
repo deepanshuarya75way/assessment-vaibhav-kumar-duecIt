@@ -11,6 +11,7 @@ export default function ProfilePage() {
   const username = params.username as string;
   const [profile, setProfile] = useState<{ user: User; matches: MatchHistoryEntry[] } | null>(null);
   const [error, setError] = useState('');
+  const matches = profile?.matches ?? [];
 
   useEffect(() => {
     api.getProfile(username)
@@ -71,7 +72,7 @@ export default function ProfilePage() {
 
             <div className="cf-panel p-4">
               <h2 className="font-bold mb-3">Recent Duels</h2>
-              {profile.matches.length === 0 ? (
+              {matches.length === 0 ? (
                 <p className="text-[var(--cf-muted)] text-sm">No matches yet.</p>
               ) : (
                 <table className="cf-table">
@@ -86,7 +87,7 @@ export default function ProfilePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {profile.matches.map((m) => (
+                    {matches.map((m) => (
                       <tr key={m.matchId}>
                         <td>{m.problemId}</td>
                         <td className="uppercase">{m.category}</td>

@@ -41,6 +41,14 @@ export default function DuelEditor({
 }: DuelEditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const prevLenRef = useRef(0);
+  // Keep a ref to the latest value to avoid stale closures in onDidChangeModelContent
+  const valueRef = useRef(value);
+  const isResettingRef = useRef(false);
+
+  // Sync ref whenever value prop changes
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
 
   const handleMount: OnMount = useCallback(
     (ed) => {
@@ -57,14 +65,25 @@ export default function DuelEditor({
       );
 
       ed.onDidChangeModelContent(() => {
-        const len = ed.getValue().length;
-        if (len - prevLenRef.current > 500 && prevLenRef.current > 0) {
-          ed.setValue(value);
+        // Skip if this change was triggered by our own setValue reset
+        if (isResettingRef.current) return;
+
+        const currentLen = ed.getValue().length;
+        const delta = currentLen - prevLenRef.current;
+
+        // Only block jumps > 500 chars AND only when previous content existed
+        // Use valueRef.current (not stale captured value) to restore correctly
+        if (delta > 500 && prevLenRef.current > 0) {
+          isResettingRef.current = true;
+          ed.setValue(valueRef.current);
+          isResettingRef.current = false;
+          prevLenRef.current = valueRef.current.length;
+        } else {
+          prevLenRef.current = currentLen;
         }
-        prevLenRef.current = ed.getValue().length;
       });
     },
-    [value]
+    [] // no deps needed — uses refs for latest values
   );
 
   useEffect(() => {

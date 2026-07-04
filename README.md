@@ -35,13 +35,6 @@ npm run dev
 
 Frontend runs at `http://localhost:3000`
 
-## Default Admin Account
-
-After first server start (seed runs automatically):
-
-- **Username:** `admin`
-- **Password:** `admin12345`
-
 ## Features
 
 - ELO matchmaking (±200 rating window, category-specific DSA/DB ratings)

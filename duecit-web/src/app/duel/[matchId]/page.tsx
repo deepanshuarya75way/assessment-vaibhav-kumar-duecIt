@@ -52,6 +52,8 @@ export default function DuelPage() {
   const [language, setLanguage] = useState('python');
   const [code, setCode] = useState('');
   const prevCodeLen = useRef(0);
+  // Guard: only load starter code on first match init, never on sync polls
+  const matchInitialized = useRef(false);
   const [runResult, setRunResult] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -77,7 +79,12 @@ export default function DuelPage() {
       readPhaseSec: data.readPhaseSec as number,
     };
     setMatch(m);
-    loadStarterCode(language, m.problem);
+
+    // Only load starter code ONCE — never overwrite the user's typed code
+    if (!matchInitialized.current) {
+      matchInitialized.current = true;
+      loadStarterCode(language, m.problem);
+    }
 
     const now = Date.now();
     const status = data.status as string | undefined;
@@ -113,14 +120,30 @@ export default function DuelPage() {
     try {
       const details = await api.getMatchDetails(matchId);
       if (!details) return;
-      initMatch(details as Record<string, unknown>);
-      sessionStorage.setItem(`match:${matchId}`, JSON.stringify(details));
       const d = details as Record<string, unknown>;
-      if (d.status === 'finished' || d.phase === 'finished') {
+
+      // Only update timing + phase — do NOT call initMatch which would reset the editor code
+      setMatch((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          serverTime: (d.serverTime as number) ?? prev.serverTime,
+          codingStartsAt: (d.codingStartsAt as number) ?? prev.codingStartsAt,
+          codingEndsAt: (d.codingEndsAt as number) ?? prev.codingEndsAt,
+        };
+      });
+
+      const serverPhase = d.phase as string;
+      const status = d.status as string | undefined;
+      if (status === 'finished' || serverPhase === 'finished') {
         await fetchMatchResult();
+      } else if (serverPhase === 'coding') {
+        setPhase('coding');
       }
+
+      sessionStorage.setItem(`match:${matchId}`, JSON.stringify(details));
     } catch { /* ignore */ }
-  }, [matchId, initMatch, fetchMatchResult]);
+  }, [matchId, fetchMatchResult]);
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');

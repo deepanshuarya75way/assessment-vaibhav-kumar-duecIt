@@ -1,23 +1,38 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, MatchHistoryEntry, User } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import AppNav, { ratingClass } from '@/components/AppNav';
 
 export default function ProfilePage() {
   const params = useParams();
+  const router = useRouter();
+  const { user, loading } = useAuth();
   const username = params.username as string;
   const [profile, setProfile] = useState<{ user: User; matches: MatchHistoryEntry[] } | null>(null);
   const [error, setError] = useState('');
   const matches = profile?.matches ?? [];
 
   useEffect(() => {
+    if (!loading && !user) {
+      setProfile(null);
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+  useEffect(() => {
+    if (loading || !user) return;
     api.getProfile(username)
       .then(setProfile)
       .catch((err) => setError(err instanceof Error ? err.message : 'Profile not found'));
-  }, [username]);
+  }, [username, user, loading]);
+
+  if (loading || !user) {
+    return <div className="p-8 text-center">Loading...</div>;
+  }
 
   return (
     <div className="min-h-screen">

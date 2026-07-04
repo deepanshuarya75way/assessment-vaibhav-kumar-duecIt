@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 
 function ratingClass(rating: number): string {
@@ -16,6 +17,12 @@ function ratingClass(rating: number): string {
 
 export default function AppNav() {
   const { user, logout } = useAuth();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
 
   return (
     <nav className="cf-nav px-4 py-2 flex items-center justify-between text-sm">
@@ -41,7 +48,7 @@ export default function AppNav() {
               {' '}
               <span className={ratingClass(user.ratingDSA)}>({user.ratingDSA})</span>
             </span>
-            <button onClick={logout} className="text-white/90 hover:underline bg-transparent border-none cursor-pointer text-sm">
+            <button onClick={handleLogout} className="text-white/90 hover:underline bg-transparent border-none cursor-pointer text-sm">
               Logout
             </button>
           </>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { api, AdminStats, ActiveMatch } from '@/lib/api';
+import { api, AdminStats, ActiveMatch, InputVar, ParamType, PARAM_TYPES } from '@/lib/api';
 import AppNav from '@/components/AppNav';
 
 interface Problem {
@@ -18,6 +18,8 @@ interface Problem {
   category: string;
   difficulty: string;
   tags: string[];
+  inputSpec?: InputVar[];
+  signature?: { funcName: string; returnType: ParamType };
 }
 
 interface TestCase {
@@ -47,6 +49,8 @@ export default function AdminPage() {
     difficulty: 'easy',
     tags: [],
     samples: [{ input: '', output: '' }],
+    inputSpec: [],
+    signature: { funcName: '', returnType: 'string' },
   });
   const [tcForm, setTCForm] = useState({
     input: '',
@@ -101,9 +105,30 @@ export default function AdminPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.createProblem({ ...form, problemId: form.problemId || undefined });
+      const inputSpec = form.inputSpec || [];
+      const hasSignature = !!form.signature?.funcName;
+      const payload = {
+        ...form,
+        problemId: form.problemId || undefined,
+        inputSpec: inputSpec.length ? inputSpec : undefined,
+        signature: hasSignature
+          ? {
+              funcName: form.signature!.funcName,
+              returnType: form.signature!.returnType,
+              params: inputSpec.filter((v) => v.passToFunc).map((v) => v.name),
+            }
+          : undefined,
+      };
+      await api.createProblem(payload);
       setShowForm(false);
-      setForm({ category: 'dsa', difficulty: 'easy', tags: [], samples: [{ input: '', output: '' }] });
+      setForm({
+        category: 'dsa',
+        difficulty: 'easy',
+        tags: [],
+        samples: [{ input: '', output: '' }],
+        inputSpec: [],
+        signature: { funcName: '', returnType: 'string' },
+      });
       loadProblems();
       loadMonitor();
     } catch (err) {
@@ -307,6 +332,32 @@ export default function AdminPage() {
               </div>
               <Input label="Sample Input" value={form.samples?.[0]?.input || ''} onChange={(v) => setForm({ ...form, samples: [{ input: v, output: form.samples?.[0]?.output || '' }] })} />
               <Input label="Sample Output" value={form.samples?.[0]?.output || ''} onChange={(v) => setForm({ ...form, samples: [{ input: form.samples?.[0]?.input || '', output: v }] })} />
+
+              <div className="border-t border-[var(--cf-border)] pt-3">
+                <span className="text-xs font-bold block mb-1">Practice Mode (optional)</span>
+                <p className="text-xs text-[var(--cf-muted)] mb-2">
+                  Leave function name blank to skip practice mode for this problem — competitive mode
+                  works either way and needs none of this.
+                </p>
+                <div className="grid grid-cols-2 gap-3 mb-2">
+                  <Input
+                    label="Function Name"
+                    value={form.signature?.funcName || ''}
+                    onChange={(v) => setForm({ ...form, signature: { funcName: v, returnType: form.signature?.returnType || 'string' } })}
+                  />
+                  <Select
+                    label="Return Type"
+                    value={form.signature?.returnType || 'string'}
+                    onChange={(v) => setForm({ ...form, signature: { funcName: form.signature?.funcName || '', returnType: v as ParamType } })}
+                    options={PARAM_TYPES}
+                  />
+                </div>
+                <InputSpecBuilder
+                  spec={form.inputSpec || []}
+                  onChange={(spec) => setForm({ ...form, inputSpec: spec })}
+                />
+              </div>
+
               <button type="submit" className="cf-btn w-full py-2">Create</button>
             </form>
           </Modal>
@@ -364,7 +415,7 @@ function TextArea({ label, value, onChange, required }: { label: string; value: 
   );
 }
 
-function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: readonly string[] }) {
   return (
     <label className="block">
       <span className="text-xs font-bold">{label}</span>
@@ -372,5 +423,82 @@ function Select({ label, value, onChange, options }: { label: string; value: str
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     </label>
+  );
+}
+
+// Ordered list of "one line of stdin" entries. Order here is the order the
+// practice-mode wrapper reads stdin in (see judge/wrapper.go), so drag order
+// matters - use the up/down buttons rather than deleting and re-adding.
+function InputSpecBuilder({ spec, onChange }: { spec: InputVar[]; onChange: (spec: InputVar[]) => void }) {
+  const update = (i: number, patch: Partial<InputVar>) => {
+    const next = spec.slice();
+    next[i] = { ...next[i], ...patch };
+    onChange(next);
+  };
+  const remove = (i: number) => onChange(spec.filter((_, idx) => idx !== i));
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= spec.length) return;
+    const next = spec.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+  };
+  const add = () =>
+    onChange([...spec, { name: '', type: 'int', passToFunc: true }]);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-bold">Input Variables (stdin, in order)</span>
+        <button type="button" onClick={add} className="cf-btn-secondary text-xs px-2 py-0.5">+ Add line</button>
+      </div>
+      {spec.length === 0 && (
+        <p className="text-xs text-[var(--cf-muted)] mb-2">No lines yet — add one per line of stdin the problem reads.</p>
+      )}
+      <div className="space-y-2">
+        {spec.map((v, i) => (
+          <div key={i} className="border border-[var(--cf-border)] p-2 text-xs space-y-1">
+            <div className="flex gap-2">
+              <input
+                className="cf-input flex-1"
+                placeholder="name (e.g. arr)"
+                value={v.name}
+                onChange={(e) => update(i, { name: e.target.value })}
+              />
+              <select
+                className="cf-select"
+                value={v.type}
+                onChange={(e) => update(i, { type: e.target.value as ParamType })}
+              >
+                {PARAM_TYPES.map((t:any) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={v.passToFunc}
+                  onChange={(e) => update(i, { passToFunc: e.target.checked })}
+                />
+                Pass to function
+              </label>
+              {(v.type === 'int[]' || v.type === 'float[]' || v.type === 'string[]') && (
+                <input
+                  className="cf-input flex-1"
+                  placeholder="length var (optional, e.g. n)"
+                  value={v.lengthVar || ''}
+                  onChange={(e) => update(i, { lengthVar: e.target.value })}
+                />
+              )}
+              <div className="ml-auto flex gap-1">
+                <button type="button" onClick={() => move(i, -1)} className="px-1">↑</button>
+                <button type="button" onClick={() => move(i, 1)} className="px-1">↓</button>
+                <button type="button" onClick={() => remove(i)} className="text-red-600 px-1">✕</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

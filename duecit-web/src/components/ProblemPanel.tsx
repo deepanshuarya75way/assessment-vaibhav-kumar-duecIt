@@ -14,6 +14,8 @@ interface ProblemPanelProps {
   samples: Sample[];
   difficulty?: string;
   watermark?: string;
+  mode?: 'competitive' | 'practice';
+  signature?: { funcName: string; params: string[] };
 }
 
 function diffClass(d?: string) {
@@ -32,6 +34,8 @@ export default function ProblemPanel({
   samples,
   difficulty,
   watermark,
+  mode = 'competitive',
+  signature,
 }: ProblemPanelProps) {
   return (
     <div
@@ -84,21 +88,42 @@ export default function ProblemPanel({
       </Section>
 
       <Section title="How to Write Your Solution">
-        <div className="text-xs leading-relaxed space-y-2 bg-[#fff8e6] border border-[#f0d080] p-3">
-          <p>
-            Read input from <strong>stdin</strong> and write output to <strong>stdout</strong>.
-            Do not print prompts, labels, or extra text — only the required output.
-          </p>
-          <p>
-            <strong>Python 3 example</strong> (for problems with <code>n</code> on line 1, numbers on line 2):
-          </p>
-          <pre className="whitespace-pre-wrap font-mono text-xs bg-[#f8f8f8] border border-[#ddd] p-2">{`n = int(input())
+        {mode === 'practice' ? (
+          <div className="text-xs leading-relaxed space-y-2 bg-[#eaf6ee] border border-[#a8d5b5] p-3">
+            <p>
+              <strong>Practice mode</strong> — just implement the function below. Reading
+              input and printing your return value are handled for you automatically.
+            </p>
+            {signature?.funcName ? (
+              <pre className="whitespace-pre-wrap font-mono text-xs bg-[#f8f8f8] border border-[#ddd] p-2">
+                {`${signature.funcName}(${signature.params.join(', ')})`}
+              </pre>
+            ) : (
+              <p className="text-[var(--cf-muted)]">
+                This problem hasn&apos;t declared a function signature yet — ask an admin to add one.
+              </p>
+            )}
+            <p className="text-[var(--cf-muted)]">
+              Return your answer from the function; don&apos;t read stdin or print anything yourself.
+            </p>
+          </div>
+        ) : (
+          <div className="text-xs leading-relaxed space-y-2 bg-[#fff8e6] border border-[#f0d080] p-3">
+            <p>
+              Read input from <strong>stdin</strong> and write output to <strong>stdout</strong>.
+              Do not print prompts, labels, or extra text — only the required output.
+            </p>
+            <p>
+              <strong>Python 3 example</strong> (for problems with <code>n</code> on line 1, numbers on line 2):
+            </p>
+            <pre className="whitespace-pre-wrap font-mono text-xs bg-[#f8f8f8] border border-[#ddd] p-2">{`n = int(input())
 arr = list(map(int, input().split()))
 print(max(arr))  # replace with your logic`}</pre>
-          <p className="text-[var(--cf-muted)]">
-            Use &quot;Run Samples&quot; to test against the examples before submitting.
-          </p>
-        </div>
+            <p className="text-[var(--cf-muted)]">
+              Use &quot;Run Samples&quot; to test against the examples before submitting.
+            </p>
+          </div>
+        )}
       </Section>
 
       <Section title="Examples">

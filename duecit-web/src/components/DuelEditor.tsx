@@ -21,6 +21,7 @@ interface DuelEditorProps {
   readOnly?: boolean;
   onTabSwitch?: () => void;
   mode?: 'competitive' | 'practice';
+  signature?: { funcName: string; params: string[] };
 }
 
 const LANG_MAP: Record<string, string> = {
@@ -40,6 +41,7 @@ export default function DuelEditor({
   readOnly = false,
   onTabSwitch,
   mode = 'competitive',
+  signature,
 }: DuelEditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const prevLenRef = useRef(0);
@@ -116,7 +118,13 @@ export default function DuelEditor({
         )}
         {!readOnly && mode === 'practice' && (
           <span className="text-emerald-400 text-xs ml-auto">
-            💡 Practice — write only your <code className="bg-zinc-700 px-1 rounded">solve()</code> function, I/O is handled automatically
+            💡 Practice — write only your{' '}
+            <code className="bg-zinc-700 px-1 rounded">
+              {signature?.funcName
+                ? `${signature.funcName}(${signature.params.join(', ')})`
+                : 'solve()'}
+            </code>{' '}
+            function, I/O is handled automatically
           </span>
         )}
         {!readOnly && mode === 'competitive' && (

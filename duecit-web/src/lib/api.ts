@@ -1,5 +1,24 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
+// Mirrors internal/models.ParamType / InputVar / FuncSignature on the backend.
+// Keep these in sync with judge/wrapper.go + judge/starter.go's supported types.
+export type ParamType = 'int' | 'float' | 'bool' | 'string' | 'int[]' | 'float[]' | 'string[]';
+
+export const PARAM_TYPES: ParamType[] = ['int', 'float', 'bool', 'string', 'int[]', 'float[]', 'string[]'];
+
+export interface InputVar {
+  name: string;
+  type: ParamType;
+  lengthVar?: string;
+  passToFunc: boolean;
+}
+
+export interface FuncSignature {
+  funcName: string;
+  params: string[];
+  returnType: ParamType;
+}
+
 export interface User {
   id: string;
   username: string;

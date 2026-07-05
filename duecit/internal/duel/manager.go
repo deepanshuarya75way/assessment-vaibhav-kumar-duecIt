@@ -200,8 +200,9 @@ func (m *Manager) RunCode(ctx context.Context, matchID, userID primitive.ObjectI
 	if err != nil {
 		return nil, fmt.Errorf("match not found")
 	}
-	if match.Phase != models.PhaseCoding {
-		return nil, fmt.Errorf("coding phase not active")
+	// Block run during reading phase only; allow coding + any other phase
+	if match.Phase == models.PhaseReading {
+		return nil, fmt.Errorf("coding phase not started yet")
 	}
 	if !m.isPlayer(match, userID) {
 		return nil, fmt.Errorf("not in match")
@@ -211,8 +212,15 @@ func (m *Manager) RunCode(ctx context.Context, matchID, userID primitive.ObjectI
 	if err != nil {
 		return nil, err
 	}
+
+	// In practice mode wrap the user's logic-only code with stdin/stdout scaffolding
+	execCode := code
+	if match.Mode == models.ModePractice {
+		execCode = judge.WrapPracticeCode(code, language)
+	}
+
 	testCases := judge.SamplesToTestCases(problem.Samples)
-	return m.judge.Evaluate(ctx, code, language, testCases)
+	return m.judge.Evaluate(ctx, execCode, language, testCases)
 }
 
 func (m *Manager) SubmitCode(ctx context.Context, matchID, userID primitive.ObjectID, code, language string, prevCodeLen int) (*models.Submission, bool, error) {
@@ -249,7 +257,13 @@ func (m *Manager) SubmitCode(ctx context.Context, matchID, userID primitive.Obje
 		}
 	}
 
-	result, err := m.judge.Evaluate(ctx, code, language, testCases)
+	// In practice mode wrap the user's logic-only code with stdin/stdout scaffolding
+	execCode := code
+	if match.Mode == models.ModePractice {
+		execCode = judge.WrapPracticeCode(code, language)
+	}
+
+	result, err := m.judge.Evaluate(ctx, execCode, language, testCases)
 	if err != nil {
 		return nil, false, err
 	}

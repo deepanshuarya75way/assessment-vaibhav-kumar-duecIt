@@ -60,9 +60,13 @@ export default function DuelPage() {
   const [tabWarnings, setTabWarnings] = useState(0);
   const [opponentProgress, setOpponentProgress] = useState('');
   const [results, setResults] = useState<Record<string, unknown> | null>(null);
+  const [runDetails, setRunDetails] = useState<Array<{
+    passed: boolean; input: string; expected: string; actual: string; error?: string;
+  }> | null>(null);
 
-  const loadStarterCode = useCallback((lang: string, problem?: Problem) => {
-    const starter = problem?.starterCode?.[lang] || '';
+  const loadStarterCode = useCallback((lang: string, problem?: Problem, mode?: string) => {
+    const key = mode === 'practice' ? `${lang}_practice` : lang;
+    const starter = problem?.starterCode?.[key] || problem?.starterCode?.[lang] || '';
     setCode(starter);
     prevCodeLen.current = starter.length;
   }, []);
@@ -83,7 +87,7 @@ export default function DuelPage() {
     // Only load starter code ONCE — never overwrite the user's typed code
     if (!matchInitialized.current) {
       matchInitialized.current = true;
-      loadStarterCode(language, m.problem);
+      loadStarterCode(language, m.problem, m.mode);
     }
 
     const now = Date.now();
@@ -236,7 +240,7 @@ export default function DuelPage() {
 
   const handleLanguageChange = (lang: string) => {
     setLanguage(lang);
-    if (match) loadStarterCode(lang, match.problem);
+    if (match) loadStarterCode(lang, match.problem, match.mode);
   };
 
   const handleTabSwitch = useCallback(() => {
@@ -250,14 +254,24 @@ export default function DuelPage() {
   const handleRun = async () => {
     if (!match) return;
     setRunResult('Running...');
+    setRunDetails(null);
     try {
       const result = await api.runCode(matchId, code, language) as {
         passedCount?: number; totalCount?: number;
-        PassedCount?: number; TotalCount?: number;
+        testResults?: Array<{ passed: boolean; input: string; expectedOutput: string; actualOutput: string; error?: string }>;
       };
-      const passed = result.passedCount ?? result.PassedCount ?? 0;
-      const total = result.totalCount ?? result.TotalCount ?? 0;
-      setRunResult(`${passed}/${total} samples passed`);
+      const passed = result.passedCount ?? 0;
+      const total = result.testResults?.length ?? 0;
+      setRunResult(`${passed}/${total} sample${total !== 1 ? 's' : ''} passed`);
+      if (result.testResults) {
+        setRunDetails(result.testResults.map(r => ({
+          passed: r.passed,
+          input: r.input,
+          expected: r.expectedOutput,
+          actual: r.actualOutput,
+          error: r.error,
+        })));
+      }
     } catch (err) {
       setRunResult(err instanceof Error ? err.message : 'Run failed');
     }
@@ -393,24 +407,50 @@ export default function DuelPage() {
                 onChange={setCode}
                 readOnly={editorLocked}
                 onTabSwitch={handleTabSwitch}
+                mode={match.mode === 'practice' ? 'practice' : 'competitive'}
               />
             </div>
-            <div className="flex items-center gap-2 px-3 py-2 bg-[#2d2d2d] border-t border-zinc-700">
-              <button
-                onClick={handleRun}
-                disabled={editorLocked}
-                className="cf-btn-secondary text-xs px-3 py-1 disabled:opacity-40"
-              >
-                Run Samples
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={editorLocked || submitting || submitted}
-                className="cf-btn text-xs px-4 py-1 disabled:opacity-40"
-              >
-                {submitting ? 'Submitting...' : submitted ? 'Submitted' : 'Submit'}
-              </button>
-              {runResult && <span className="text-zinc-400 text-xs ml-2">{runResult}</span>}
+            {/* Bottom action bar + test results */}
+            <div className="flex flex-col bg-[#2d2d2d] border-t border-zinc-700 max-h-48 overflow-y-auto">
+              <div className="flex items-center gap-2 px-3 py-2 shrink-0">
+                <button
+                  onClick={handleRun}
+                  disabled={editorLocked}
+                  className="cf-btn-secondary text-xs px-3 py-1 disabled:opacity-40"
+                >
+                  Run Samples
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={editorLocked || submitting || submitted}
+                  className="cf-btn text-xs px-4 py-1 disabled:opacity-40"
+                >
+                  {submitting ? 'Submitting...' : submitted ? 'Submitted' : 'Submit'}
+                </button>
+                {runResult && <span className="text-zinc-400 text-xs ml-2">{runResult}</span>}
+              </div>
+              {/* Per-test-case results */}
+              {runDetails && (
+                <div className="px-3 pb-2 flex flex-col gap-1">
+                  {runDetails.map((tc, i) => (
+                    <div
+                      key={i}
+                      className={`text-xs rounded px-2 py-1 font-mono ${
+                        tc.passed ? 'bg-green-900/40 text-green-300' : 'bg-red-900/40 text-red-300'
+                      }`}
+                    >
+                      <span className="font-bold mr-2">{tc.passed ? '✓' : '✗'} Case {i + 1}</span>
+                      {!tc.passed && (
+                        <span className="text-zinc-400">
+                          in: <span className="text-white">{tc.input.slice(0, 40)}</span>
+                          {' | '}expected: <span className="text-green-300">{tc.expected.slice(0, 40)}</span>
+                          {' | '}got: <span className="text-red-300">{(tc.actual || tc.error || '(empty)').slice(0, 60)}</span>
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

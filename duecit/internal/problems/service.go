@@ -148,6 +148,7 @@ func (s *Service) CountProblems(ctx context.Context) (int64, error) {
 
 func defaultStarterCode() map[string]string {
 	return map[string]string{
+		// --- Competitive: full stdin/stdout program ---
 		"python": `# Read from stdin, write to stdout (no extra text)
 # Example for n + list input:
 # n = int(input())
@@ -158,8 +159,50 @@ func defaultStarterCode() map[string]string {
 const input = fs.readFileSync(0, 'utf8').trim().split(/\\s+/);
 // Write your solution here — use input tokens, print only the answer
 `,
-		"cpp":        "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // Read from cin, write to cout — no extra text\n    return 0;\n}\n",
-		"java":       "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Read from sc, print only the required output\n    }\n}\n",
-		"go":         "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n)\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\t_ = reader\n\t// Read from stdin, fmt.Println only the answer\n}\n",
+		"cpp":  "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // Read from cin, write to cout — no extra text\n    return 0;\n}\n",
+		"java": "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Read from sc, print only the required output\n    }\n}\n",
+		"go":   "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n)\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\t_ = reader\n\t// Read from stdin, fmt.Println only the answer\n}\n",
+
+		// --- Practice: logic-only (the wrapper adds stdin/stdout) ---
+		"python_practice": `def solve():
+    # Write your logic here.
+    # Use _readline(), _read_int(), _read_ints(), _read_str() to read input.
+    # Return the answer — do NOT print.
+    pass
+`,
+		"javascript_practice": `function solve() {
+  // Use readline(), readInt(), readInts() to read input.
+  // Return the answer — do NOT console.log.
+}
+`,
+		"cpp_practice": `#include <bits/stdc++.h>
+using namespace std;
+
+auto solve() {
+    // Read from cin, return the answer.
+    int n;
+    cin >> n;
+    return n; // replace with your answer
+}
+`,
+		"java_practice": `import java.util.*;
+
+class Solution {
+    // Add a Scanner field if needed: Scanner sc;
+    public Object solve() {
+        // Write your logic here. Return the answer.
+        return null;
+    }
+}
+`,
+		"go_practice": `import "fmt"
+
+func solve() interface{} {
+    // Use fmt.Fscan(_reader, &x) to read input.
+    var n int
+    fmt.Fscan(_reader, &n)
+    return n // replace with your answer
+}
+`,
 	}
 }

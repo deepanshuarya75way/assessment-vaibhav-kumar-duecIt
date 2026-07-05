@@ -9,6 +9,7 @@ import (
 
 	"github.com/duecit/duecit/internal/auth"
 	"github.com/duecit/duecit/internal/duel"
+	"github.com/duecit/duecit/internal/judge"
 	"github.com/duecit/duecit/internal/matchmaking"
 	"github.com/duecit/duecit/internal/models"
 	"github.com/duecit/duecit/internal/problems"
@@ -355,6 +356,11 @@ func (h *Handlers) AdminCreateProblem(w http.ResponseWriter, r *http.Request) {
 	if p.ProblemID == "" {
 		p.ProblemID = "P" + strings.ToUpper(primitive.NewObjectID().Hex()[:6])
 	}
+	// Auto-generate the practice-mode starter stub from the declared
+	// signature, unless the admin already supplied one explicitly.
+	if p.Signature.FuncName != "" && len(p.StarterCode) == 0 {
+		p.StarterCode = judge.GenerateAllStarterCode(p.InputSpec, p.Signature)
+	}
 	created, err := h.Problems.CreateProblem(r.Context(), &p)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
@@ -374,6 +380,22 @@ func (h *Handlers) AdminUpdateProblem(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
+	}
+	// If this update touched the signature or input spec, and the admin
+	// didn't also hand-supply new starter code in the same request,
+	// regenerate it so the editor stub stays in sync with the wrapper.
+	_, touchedSig := update["signature"]
+	_, touchedSpec := update["inputSpec"]
+	_, touchedStarter := update["starterCode"]
+	if (touchedSig || touchedSpec) && !touchedStarter && p.Signature.FuncName != "" {
+		p.StarterCode = judge.GenerateAllStarterCode(p.InputSpec, p.Signature)
+		p, err = h.Problems.UpdateProblem(r.Context(), problemID, map[string]interface{}{
+			"starterCode": p.StarterCode,
+		})
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	response.JSON(w, http.StatusOK, "Problem updated", p)
 }

@@ -216,7 +216,7 @@ func (m *Manager) RunCode(ctx context.Context, matchID, userID primitive.ObjectI
 	// In practice mode wrap the user's logic-only code with stdin/stdout scaffolding
 	execCode := code
 	if match.Mode == models.ModePractice {
-		execCode = judge.WrapPracticeCode(code, language)
+		execCode = judge.WrapPracticeCode(code, language, problem.InputSpec, problem.Signature)
 	}
 
 	testCases := judge.SamplesToTestCases(problem.Samples)
@@ -249,18 +249,20 @@ func (m *Manager) SubmitCode(ctx context.Context, matchID, userID primitive.Obje
 		}
 	}
 
+	problem, err := m.problems.GetProblem(ctx, match.ProblemID)
+	if err != nil || problem == nil {
+		return nil, false, fmt.Errorf("problem not found")
+	}
+
 	testCases, err := m.problems.GetTestCases(ctx, match.ProblemID, true)
 	if err != nil || len(testCases) == 0 {
-		problem, _ := m.problems.GetProblem(ctx, match.ProblemID)
-		if problem != nil {
-			testCases = judge.SamplesToTestCases(problem.Samples)
-		}
+		testCases = judge.SamplesToTestCases(problem.Samples)
 	}
 
 	// In practice mode wrap the user's logic-only code with stdin/stdout scaffolding
 	execCode := code
 	if match.Mode == models.ModePractice {
-		execCode = judge.WrapPracticeCode(code, language)
+		execCode = judge.WrapPracticeCode(code, language, problem.InputSpec, problem.Signature)
 	}
 
 	result, err := m.judge.Evaluate(ctx, execCode, language, testCases)

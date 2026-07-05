@@ -29,6 +29,42 @@ type Sample struct {
 	Output string `bson:"output" json:"output"`
 }
 
+// ParamType is the type of one function parameter or return value in a
+// language-agnostic form. Used to drive both starter-code generation and
+// the practice-mode stdin-parsing wrapper.
+type ParamType string
+
+const (
+	TypeInt       ParamType = "int"
+	TypeFloat     ParamType = "float"
+	TypeBool      ParamType = "bool"
+	TypeString    ParamType = "string"
+	TypeIntArr    ParamType = "int[]"
+	TypeFloatArr  ParamType = "float[]"
+	TypeStringArr ParamType = "string[]"
+)
+
+// InputVar describes one line of stdin, read in declaration order.
+// Not every InputVar is passed to the user's function - e.g. an array's
+// length is often read from stdin (n) purely so the wrapper knows how many
+// tokens to expect; it isn't itself a function argument, hence PassToFunc.
+type InputVar struct {
+	Name       string    `bson:"name" json:"name"`
+	Type       ParamType `bson:"type" json:"type"`
+	LengthVar  string    `bson:"lengthVar,omitempty" json:"lengthVar,omitempty"`
+	PassToFunc bool      `bson:"passToFunc" json:"passToFunc"`
+}
+
+// FuncSignature describes the practice-mode entry point: the starter code
+// stub shown in the editor, and the call the wrapper makes after reading
+// InputSpec from stdin. Param names here must match InputVar.Name entries
+// in the same Problem's InputSpec.
+type FuncSignature struct {
+	FuncName   string    `bson:"funcName" json:"funcName"`
+	Params     []string  `bson:"params" json:"params"`
+	ReturnType ParamType `bson:"returnType" json:"returnType"`
+}
+
 type Problem struct {
 	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	ProblemID    string             `bson:"problemId" json:"problemId"`
@@ -42,6 +78,8 @@ type Problem struct {
 	Difficulty   string             `bson:"difficulty" json:"difficulty"`
 	Tags         []string           `bson:"tags" json:"tags"`
 	StarterCode  map[string]string  `bson:"starterCode,omitempty" json:"starterCode,omitempty"`
+	InputSpec    []InputVar         `bson:"inputSpec,omitempty" json:"inputSpec,omitempty"`
+	Signature    FuncSignature      `bson:"signature,omitempty" json:"signature,omitempty"`
 	Version      int                `bson:"version" json:"version"`
 	CreatedAt    time.Time          `bson:"createdAt" json:"createdAt"`
 	UpdatedAt    time.Time          `bson:"updatedAt" json:"updatedAt"`
@@ -132,6 +170,7 @@ type ProblemPublic struct {
 	Difficulty   string            `json:"difficulty"`
 	Tags         []string          `json:"tags"`
 	StarterCode  map[string]string `json:"starterCode,omitempty"`
+	Signature    FuncSignature     `json:"signature,omitempty"`
 }
 
 func (p *Problem) ToPublic() ProblemPublic {
@@ -147,6 +186,7 @@ func (p *Problem) ToPublic() ProblemPublic {
 		Difficulty:   p.Difficulty,
 		Tags:         p.Tags,
 		StarterCode:  p.StarterCode,
+		Signature:    p.Signature,
 	}
 }
 

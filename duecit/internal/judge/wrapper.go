@@ -1,22 +1,61 @@
 package judge
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/duecit/duecit/internal/models"
+)
 
 // WrapPracticeCode wraps a user's "logic-only" function in the stdin/stdout
 // boilerplate needed by Piston, so in practice mode the user only writes
-// the algorithm – not the I/O scaffolding.
+// the algorithm - not the I/O scaffolding.
 //
-// The convention is:
-//   - The user writes a function named `solve` (or equivalent per language).
-//   - The wrapper reads all stdin, calls solve(), and prints the result.
+// Unlike the old convention-based wrapper (fixed zero-arg solve(), fixed
+// helper names), this one is driven entirely by the problem's own
+// InputSpec (how to parse stdin) and Signature (what to call). Whatever
+// function name/params a problem declares, the wrapper reads stdin in the
+// declared order and calls exactly that function with exactly those args.
 //
-// This is intentionally simple. For complex input shapes the problem
-// should either use competitive mode or ship a custom starterCode that
-// already includes the wrapper.
-func WrapPracticeCode(userCode, language string) string {
+// For any language without a case below, the code runs unwrapped - same
+// as competitive mode - so nothing silently breaks for unsupported langs.
+func WrapPracticeCode(userCode string, language string, spec []models.InputVar, sig models.FuncSignature) string {
 	switch language {
 	case "python":
-		return fmt.Sprintf(`import sys
+		return wrapPython(userCode, spec, sig)
+	case "javascript":
+		return wrapJS(userCode, spec, sig)
+	case "go":
+		return wrapGo(userCode, spec, sig)
+	default:
+		return userCode
+	}
+}
+
+func wrapPython(userCode string, spec []models.InputVar, sig models.FuncSignature) string {
+	var reads strings.Builder
+	for _, v := range spec {
+		switch v.Type {
+		case models.TypeInt:
+			fmt.Fprintf(&reads, "%s = int(_readline())\n", v.Name)
+		case models.TypeFloat:
+			fmt.Fprintf(&reads, "%s = float(_readline())\n", v.Name)
+		case models.TypeBool:
+			fmt.Fprintf(&reads, "%s = _readline().strip().lower() in ('true', '1', 'yes')\n", v.Name)
+		case models.TypeString:
+			fmt.Fprintf(&reads, "%s = _readline()\n", v.Name)
+		case models.TypeIntArr:
+			fmt.Fprintf(&reads, "%s = list(map(int, _readline().split()))\n", v.Name)
+		case models.TypeFloatArr:
+			fmt.Fprintf(&reads, "%s = list(map(float, _readline().split()))\n", v.Name)
+		case models.TypeStringArr:
+			fmt.Fprintf(&reads, "%s = _readline().split()\n", v.Name)
+		}
+	}
+
+	callArgs := strings.Join(sig.Params, ", ")
+
+	return fmt.Sprintf(`import sys
 _input_lines = sys.stdin.read().strip().split('\n')
 _ptr = [0]
 
@@ -25,95 +64,146 @@ def _readline():
     _ptr[0] += 1
     return line.strip()
 
-def _read_int():
-    return int(_readline())
-
-def _read_ints():
-    return list(map(int, _readline().split()))
-
-def _read_str():
-    return _readline()
-
 # ---- user code ----
 %s
 # ---- end user code ----
 
-# Entrypoint: call solve() and print result
-_result = solve()
+%s
+_result = %s(%s)
 if _result is not None:
-    print(_result)
-`, userCode)
-
-	case "javascript":
-		return fmt.Sprintf(`const _lines = require('fs').readFileSync(0,'utf8').trim().split('\n');
-let _ptr = 0;
-const readline = () => (_lines[_ptr++] || '').trim();
-const readInt = () => parseInt(readline());
-const readInts = () => readline().split(/\s+/).map(Number);
-
-// ---- user code ----
-%s
-// ---- end user code ----
-
-const _result = solve();
-if (_result !== undefined && _result !== null) process.stdout.write(String(_result) + '\n');
-`, userCode)
-
-	case "cpp":
-		return fmt.Sprintf(`#include <bits/stdc++.h>
-using namespace std;
-
-// ---- user code ----
-%s
-// ---- end user code ----
-
-int main() {
-    auto result = solve();
-    cout << result << endl;
-    return 0;
+    if isinstance(_result, (list, tuple)):
+        print(' '.join(str(x) for x in _result))
+    else:
+        print(_result)
+`, userCode, reads.String(), sig.FuncName, callArgs)
 }
-`, userCode)
 
-	case "java":
-		return fmt.Sprintf(`import java.util.*;
+func wrapJS(userCode string, spec []models.InputVar, sig models.FuncSignature) string {
+	var reads strings.Builder
+	for _, v := range spec {
+		switch v.Type {
+		case models.TypeInt:
+			fmt.Fprintf(&reads, "const %s = parseInt(_readline(), 10);\n", v.Name)
+		case models.TypeFloat:
+			fmt.Fprintf(&reads, "const %s = parseFloat(_readline());\n", v.Name)
+		case models.TypeBool:
+			fmt.Fprintf(&reads, "const %s = ['true', '1', 'yes'].includes(_readline().trim().toLowerCase());\n", v.Name)
+		case models.TypeString:
+			fmt.Fprintf(&reads, "const %s = _readline();\n", v.Name)
+		case models.TypeIntArr, models.TypeFloatArr:
+			fmt.Fprintf(&reads, "const %s = _readline().split(/\\s+/).filter(Boolean).map(Number);\n", v.Name)
+		case models.TypeStringArr:
+			fmt.Fprintf(&reads, "const %s = _readline().split(/\\s+/).filter(Boolean);\n", v.Name)
+		}
+	}
+
+	callArgs := strings.Join(sig.Params, ", ")
+
+	return fmt.Sprintf(`const _lines = require('fs').readFileSync(0, 'utf8').trim().split('\n');
+let _ptr = 0;
+const _readline = () => (_lines[_ptr++] || '').trim();
 
 // ---- user code ----
 %s
 // ---- end user code ----
 
-public class Main {
-    public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
-        Solution sol = new Solution();
-        // For practice mode the user's Solution class should have a solve() method
-        // that reads from Scanner sc
+%s
+const _result = %s(%s);
+if (_result !== undefined && _result !== null) {
+    if (Array.isArray(_result)) {
+        process.stdout.write(_result.join(' ') + '\n');
+    } else {
+        process.stdout.write(String(_result) + '\n');
     }
 }
-`, userCode)
+`, userCode, reads.String(), sig.FuncName, callArgs)
+}
 
-	case "go":
-		return fmt.Sprintf(`package main
+func wrapGo(userCode string, spec []models.InputVar, sig models.FuncSignature) string {
+	var reads strings.Builder
+	needStrconv := false
+	for _, v := range spec {
+		switch v.Type {
+		case models.TypeInt:
+			fmt.Fprintf(&reads, "\t%s, _ := strconv.Atoi(_readline())\n", v.Name)
+			needStrconv = true
+		case models.TypeFloat:
+			fmt.Fprintf(&reads, "\t%s, _ := strconv.ParseFloat(_readline(), 64)\n", v.Name)
+			needStrconv = true
+		case models.TypeBool:
+			fmt.Fprintf(&reads, "\t%s := _readline() == \"true\"\n", v.Name)
+		case models.TypeString:
+			fmt.Fprintf(&reads, "\t%s := _readline()\n", v.Name)
+		case models.TypeIntArr:
+			fmt.Fprintf(&reads, "\t%s := _readInts(_readline())\n", v.Name)
+			needStrconv = true
+		case models.TypeFloatArr:
+			fmt.Fprintf(&reads, "\t%s := _readFloats(_readline())\n", v.Name)
+			needStrconv = true
+		case models.TypeStringArr:
+			fmt.Fprintf(&reads, "\t%s := strings.Fields(_readline())\n", v.Name)
+		}
+	}
+
+	strconvImport := ""
+	if needStrconv {
+		strconvImport = "\n\t\"strconv\""
+	}
+
+	callArgs := strings.Join(sig.Params, ", ")
+
+	printResult := "\tfmt.Println(result)"
+	switch sig.ReturnType {
+	case models.TypeIntArr, models.TypeFloatArr, models.TypeStringArr:
+		printResult = `	strs := make([]string, len(result))
+	for i, v := range result {
+		strs[i] = fmt.Sprint(v)
+	}
+	fmt.Println(strings.Join(strs, " "))`
+	}
+
+	return fmt.Sprintf(`package main
 
 import (
 	"bufio"
 	"fmt"
-	"os"
+	"os"%s
+	"strings"
 )
 
 var _reader = bufio.NewReader(os.Stdin)
+
+func _readline() string {
+	line, _ := _reader.ReadString('\n')
+	return strings.TrimSpace(line)
+}
+
+func _readInts(line string) []int {
+	fields := strings.Fields(line)
+	out := make([]int, len(fields))
+	for i, f := range fields {
+		out[i], _ = strconv.Atoi(f)
+	}
+	return out
+}
+
+func _readFloats(line string) []float64 {
+	fields := strings.Fields(line)
+	out := make([]float64, len(fields))
+	for i, f := range fields {
+		out[i], _ = strconv.ParseFloat(f, 64)
+	}
+	return out
+}
 
 // ---- user code ----
 %s
 // ---- end user code ----
 
 func main() {
-	result := solve()
-	fmt.Println(result)
+%s
+	result := %s(%s)
+%s
 }
-`, userCode)
-
-	default:
-		// For unknown languages, return as-is
-		return userCode
-	}
+`, strconvImport, userCode, reads.String(), sig.FuncName, callArgs, printResult)
 }

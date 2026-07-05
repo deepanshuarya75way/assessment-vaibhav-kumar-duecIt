@@ -12,6 +12,11 @@ import DuelEditor, { getCodeLength } from '@/components/DuelEditor';
 import MatchTimer from '@/components/MatchTimer';
 import AntiCapture from '@/components/AntiCapture';
 
+// Languages the practice-mode wrapper actually supports (see judge/wrapper.go).
+// Keep this in sync with backend WrapPracticeCode's switch cases - anything
+// not in this list runs as a raw full program even when match.mode is 'practice'.
+const PRACTICE_SUPPORTED_LANGS = ['python', 'javascript', 'go'];
+
 interface Problem {
   id: string;
   title: string;
@@ -22,6 +27,7 @@ interface Problem {
   difficulty?: string;
   samples: { input: string; output: string }[];
   starterCode?: Record<string, string>;
+  signature?: { funcName: string; params: string[]; returnType: string };
 }
 
 interface Opponent {
@@ -339,6 +345,16 @@ export default function DuelPage() {
   const editorLocked = phase === 'reading';
   const watermark = `${user.username} · ${matchId.slice(-8)}`;
 
+  // What the judge will actually do for the current language, not just what
+  // the match was set up as - practice mode only wraps languages the
+  // wrapper supports (see PRACTICE_SUPPORTED_LANGS above).
+  const effectiveMode: 'competitive' | 'practice' | 'practice-raw' =
+    match.mode !== 'practice'
+      ? 'competitive'
+      : PRACTICE_SUPPORTED_LANGS.includes(language) && !!match.problem.signature?.funcName
+        ? 'practice'
+        : 'practice-raw';
+
   return (
     <AntiCapture username={user.username} matchId={matchId}>
       <div className="h-screen flex flex-col">
@@ -396,6 +412,8 @@ export default function DuelPage() {
               samples={match.problem.samples}
               difficulty={match.problem.difficulty}
               watermark={watermark}
+              mode={effectiveMode}
+              signature={match.problem.signature}
             />
           </div>
           <div className="flex flex-col min-h-0 bg-[var(--editor-bg)]">
@@ -407,7 +425,8 @@ export default function DuelPage() {
                 onChange={setCode}
                 readOnly={editorLocked}
                 onTabSwitch={handleTabSwitch}
-                mode={match.mode === 'practice' ? 'practice' : 'competitive'}
+                mode={effectiveMode}
+                signature={match.problem.signature}
               />
             </div>
             {/* Bottom action bar + test results */}

@@ -14,7 +14,7 @@ interface ProblemPanelProps {
   samples: Sample[];
   difficulty?: string;
   watermark?: string;
-  mode?: 'competitive' | 'practice';
+  mode?: 'competitive' | 'practice' | 'practice-raw';
   signature?: { funcName: string; params: string[] };
 }
 

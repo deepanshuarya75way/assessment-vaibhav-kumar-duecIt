@@ -30,11 +30,18 @@ func GenerateStarterCode(spec []models.InputVar, sig models.FuncSignature, langu
 
 // GenerateAllStarterCode builds the StarterCode map for every
 // practice-supported language, ready to store on models.Problem.StarterCode.
+//
+// Keys are suffixed "_practice" (e.g. "python_practice") deliberately, not
+// the bare language name. The frontend's loadStarterCode looks up
+// `${lang}_practice` first and falls back to the bare `${lang}` key. If we
+// wrote the bare key here, that fallback would hand the practice-only
+// function stub to competitive mode too - wrong on both counts, since
+// competitive expects a full program, not a bare function.
 func GenerateAllStarterCode(spec []models.InputVar, sig models.FuncSignature) map[string]string {
 	out := map[string]string{}
 	for _, lang := range []string{"python", "javascript", "go"} {
 		if code := GenerateStarterCode(spec, sig, lang); code != "" {
-			out[lang] = code
+			out[lang+"_practice"] = code
 		}
 	}
 	return out

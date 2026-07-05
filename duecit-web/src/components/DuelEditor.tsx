@@ -20,7 +20,11 @@ interface DuelEditorProps {
   onChange: (value: string) => void;
   readOnly?: boolean;
   onTabSwitch?: () => void;
-  mode?: 'competitive' | 'practice';
+  // 'practice-raw' = match is in practice mode but the selected language has
+  // no wrapper (see judge/wrapper.go's supported cases) - the judge will run
+  // this language's code as a full program either way, so say so instead of
+  // showing the "write only solve()" message that would be false for it.
+  mode?: 'competitive' | 'practice' | 'practice-raw';
   signature?: { funcName: string; params: string[] };
 }
 
@@ -125,6 +129,11 @@ export default function DuelEditor({
                 : 'solve()'}
             </code>{' '}
             function, I/O is handled automatically
+          </span>
+        )}
+        {!readOnly && mode === 'practice-raw' && (
+          <span className="text-yellow-400 text-xs ml-auto">
+            ⚠️ Practice mode isn&apos;t available for this language yet — write the full program (stdin → stdout)
           </span>
         )}
         {!readOnly && mode === 'competitive' && (

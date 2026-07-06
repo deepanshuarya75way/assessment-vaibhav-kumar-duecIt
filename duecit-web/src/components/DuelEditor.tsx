@@ -133,7 +133,7 @@ export default function DuelEditor({
         )}
         {!readOnly && mode === 'practice-raw' && (
           <span className="text-yellow-400 text-xs ml-auto">
-            ⚠️ Practice mode isn&apos;t available for this language yet — write the full program (stdin → stdout)
+            ⚠️ Practice mode isn&apos;t set up for this problem/language yet — write the full program (stdin → stdout)
           </span>
         )}
         {!readOnly && mode === 'competitive' && (

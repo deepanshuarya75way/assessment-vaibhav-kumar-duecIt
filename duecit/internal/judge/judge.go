@@ -154,6 +154,29 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 	defer resp.Body.Close()
 
 	raw, _ := io.ReadAll(resp.Body)
+
+	// Piston returns a non-200 with a JSON {"message": "..."} body when the
+	// request itself is rejected (bad language/version, malformed payload,
+	// etc.) - that's a different failure mode than "the user's code ran and
+	// produced no output", and was previously indistinguishable from it:
+	// the zero-valued pistonResponse below has empty Stdout/Stderr either
+	// way, so this was silently showing as "(empty)" with no error at all.
+	if resp.StatusCode != http.StatusOK {
+		var perr struct {
+			Message string `json:"message"`
+		}
+		_ = json.Unmarshal(raw, &perr)
+		msg := perr.Message
+		if msg == "" {
+			msg = fmt.Sprintf("piston returned HTTP %d", resp.StatusCode)
+		}
+		return models.TestResult{
+			Passed:        false,
+			Error:         "execution engine error: " + msg,
+			ExecutionTime: time.Since(start).Milliseconds(),
+		}
+	}
+
 	var pr pistonResponse
 	if err := json.Unmarshal(raw, &pr); err != nil {
 		return models.TestResult{Passed: false, Error: err.Error(), ExecutionTime: time.Since(start).Milliseconds()}

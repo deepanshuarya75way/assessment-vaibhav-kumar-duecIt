@@ -356,10 +356,25 @@ func (h *Handlers) AdminCreateProblem(w http.ResponseWriter, r *http.Request) {
 	if p.ProblemID == "" {
 		p.ProblemID = "P" + strings.ToUpper(primitive.NewObjectID().Hex()[:6])
 	}
-	// Auto-generate the practice-mode starter stub from the declared
-	// signature, unless the admin already supplied one explicitly.
-	if p.Signature.FuncName != "" && len(p.StarterCode) == 0 {
-		p.StarterCode = judge.GenerateAllStarterCode(p.InputSpec, p.Signature)
+	if p.StarterCode == nil {
+		p.StarterCode = map[string]string{}
+	}
+	// Competitive-mode syntax boilerplate (bare language keys, e.g. "python"):
+	// fill in only where the admin didn't already provide one.
+	for lang, tmpl := range judge.AllCompetitiveTemplates() {
+		if _, exists := p.StarterCode[lang]; !exists {
+			p.StarterCode[lang] = tmpl
+		}
+	}
+	// Practice-mode function stub (_practice keys, e.g. "python_practice"):
+	// only for problems that have declared a signature, same rule - don't
+	// clobber anything explicitly supplied.
+	if p.Signature.FuncName != "" {
+		for lang, code := range judge.GenerateAllStarterCode(p.InputSpec, p.Signature) {
+			if _, exists := p.StarterCode[lang]; !exists {
+				p.StarterCode[lang] = code
+			}
+		}
 	}
 	created, err := h.Problems.CreateProblem(r.Context(), &p)
 	if err != nil {

@@ -449,7 +449,21 @@ func (m *Manager) finalizeMatch(ctx context.Context, matchID primitive.ObjectID)
 	}
 
 	var wUpdate, lUpdate *elo.RatingUpdate
-	if isDraw {
+	if match.Mode == models.ModePractice {
+		// Practice matches never affect rating. Fetch current username/rating
+		// as-is so the result payload still has something to show, just with
+		// a Change of 0 - don't call into the elo service at all, since that
+		// would persist a rating mutation.
+		var wUser, lUser models.User
+		_ = m.users.FindOne(ctx, bson.M{"_id": winnerID}).Decode(&wUser)
+		_ = m.users.FindOne(ctx, bson.M{"_id": loserID}).Decode(&lUser)
+		wRating, lRating := wUser.RatingDSA, lUser.RatingDSA
+		if match.Category == models.CategoryDB {
+			wRating, lRating = wUser.RatingDB, lUser.RatingDB
+		}
+		wUpdate = &elo.RatingUpdate{Username: wUser.Username, Change: 0, NewRating: wRating}
+		lUpdate = &elo.RatingUpdate{Username: lUser.Username, Change: 0, NewRating: lRating}
+	} else if isDraw {
 		wUpdate, lUpdate, _ = m.elo.UpdateDraw(ctx, match.PlayerA, match.PlayerB, match.Category, match.Difficulty)
 	} else {
 		wUpdate, lUpdate, _ = m.elo.UpdateRatings(ctx, winnerID, loserID, match.Category, match.Difficulty, false)

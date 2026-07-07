@@ -31,6 +31,20 @@ interface Problem {
   driverLanguages?: string[];
 }
 
+// Single source of truth for "is this problem+language function-only or raw
+// full-program". Used by both the banner/instructions render AND
+// loadStarterCode below - previously these were two separate inline checks
+// that quietly drifted apart (banner said "write only twoSum(nums, target)"
+// while the editor preloaded the raw stdin template, since loadStarterCode
+// was still keying off match.mode instead of this). Change the rule once,
+// here, and both call sites stay in sync automatically.
+function computeIoMode(problem: Problem | undefined, language: string): 'function' | 'raw' {
+  if (!problem) return 'raw';
+  const hasDriver = !!problem.driverLanguages?.includes(language);
+  const hasAutoWrapper = WRAPPER_SUPPORTED_LANGS.includes(language) && !!problem.signature?.funcName;
+  return hasDriver || hasAutoWrapper ? 'function' : 'raw';
+}
+
 interface Opponent {
   userId: string;
   username: string;
@@ -71,8 +85,9 @@ export default function DuelPage() {
     passed: boolean; input: string; expected: string; actual: string; error?: string;
   }> | null>(null);
 
-  const loadStarterCode = useCallback((lang: string, problem?: Problem, mode?: string) => {
-    const key = mode === 'practice' ? `${lang}_practice` : lang;
+  const loadStarterCode = useCallback((lang: string, problem?: Problem) => {
+    const ioMode = computeIoMode(problem, lang);
+    const key = ioMode === 'function' ? `${lang}_practice` : lang;
     const starter = problem?.starterCode?.[key] || problem?.starterCode?.[lang] || '';
     setCode(starter);
     prevCodeLen.current = starter.length;
@@ -94,7 +109,7 @@ export default function DuelPage() {
     // Only load starter code ONCE — never overwrite the user's typed code
     if (!matchInitialized.current) {
       matchInitialized.current = true;
-      loadStarterCode(language, m.problem, m.mode);
+      loadStarterCode(language, m.problem);
     }
 
     const now = Date.now();
@@ -247,7 +262,7 @@ export default function DuelPage() {
 
   const handleLanguageChange = (lang: string) => {
     setLanguage(lang);
-    if (match) loadStarterCode(lang, match.problem, match.mode);
+    if (match) loadStarterCode(lang, match.problem);
   };
 
   const handleTabSwitch = useCallback(() => {
@@ -347,16 +362,10 @@ export default function DuelPage() {
   const watermark = `${user.username} · ${matchId.slice(-8)}`;
 
   // Whether the judge wraps this code (function-only) or runs it raw (full
-  // program). Two independent ways a language can end up function-only:
-  // a hand-written driver (admin wrote the I/O glue directly), or the
-  // auto-generated wrapper (admin filled in Input Variables + Signature).
-  // Either one qualifies - see judge.BuildExecutable's fallback chain.
+  // program) - see computeIoMode above for the single source of truth.
   // NOT tied to competitive vs practice: a competitive match on a problem
   // with a driver/signature is just as function-only as a practice match.
-  const hasDriver = !!match.problem.driverLanguages?.includes(language);
-  const hasAutoWrapper =
-    WRAPPER_SUPPORTED_LANGS.includes(language) && !!match.problem.signature?.funcName;
-  const ioMode: 'function' | 'raw' = hasDriver || hasAutoWrapper ? 'function' : 'raw';
+  const ioMode = computeIoMode(match.problem, language);
   // Whether this match affects ELO - this is the actual practice/competitive
   // distinction now (see finalizeMatch on the backend).
   const rated = match.mode === 'competitive';

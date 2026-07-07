@@ -14,7 +14,7 @@ interface ProblemPanelProps {
   samples: Sample[];
   difficulty?: string;
   watermark?: string;
-  mode?: 'competitive' | 'practice' | 'practice-raw';
+  ioMode?: 'function' | 'raw';
   signature?: { funcName: string; params: string[] };
 }
 
@@ -34,7 +34,7 @@ export default function ProblemPanel({
   samples,
   difficulty,
   watermark,
-  mode = 'competitive',
+  ioMode = 'raw',
   signature,
 }: ProblemPanelProps) {
   return (
@@ -88,11 +88,11 @@ export default function ProblemPanel({
       </Section>
 
       <Section title="How to Write Your Solution">
-        {mode === 'practice' ? (
+        {ioMode === 'function' ? (
           <div className="text-xs leading-relaxed space-y-2 bg-[#eaf6ee] border border-[#a8d5b5] p-3">
             <p>
-              <strong>Practice mode</strong> — just implement the function below. Reading
-              input and printing your return value are handled for you automatically.
+              Just implement the function below. Reading input and printing your
+              return value are handled for you automatically.
             </p>
             {signature?.funcName ? (
               <pre className="whitespace-pre-wrap font-mono text-xs bg-[#f8f8f8] border border-[#ddd] p-2">

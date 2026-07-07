@@ -7,6 +7,44 @@ import (
 	"github.com/duecit/duecit/internal/models"
 )
 
+// SolutionPlaceholder is the token an admin's hand-written driver code must
+// contain somewhere - the submitted code is spliced in at that exact spot,
+// verbatim. Chosen to be valid to drop into a comment in every supported
+// language without needing escaping.
+const SolutionPlaceholder = "##SOLUTION##"
+
+// BuildExecutable is the single entry point for turning submitted code into
+// something the judge can actually run. Three-tier fallback, in order:
+//
+//  1. Hand-written driver (problem.DriverCode[language]) - full admin
+//     control. The submitted code replaces SolutionPlaceholder verbatim.
+//  2. Auto-generated wrapper from InputSpec/Signature (WrapPracticeCode) -
+//     the no-hand-writing-required path from earlier.
+//  3. Raw passthrough - the submitted code runs exactly as written, full
+//     program, stdin/stdout. Same as if neither of the above were configured.
+//
+// This replaces the old mode-gated call in manager.go: there's no longer an
+// "if practice" check there at all - call this unconditionally and let the
+// problem's own configuration decide what happens.
+func BuildExecutable(code, language string, driverCode map[string]string, spec []models.InputVar, sig models.FuncSignature) string {
+	if driver, ok := driverCode[language]; ok && driver != "" {
+		if strings.Contains(driver, SolutionPlaceholder) {
+			return strings.Replace(driver, SolutionPlaceholder, code, 1)
+		}
+		// Driver configured but missing the placeholder - admin error, not
+		// a reason to silently drop the submitted code. Append it below a
+		// comment so it's at least visible in Piston's stderr/stdout for
+		// debugging, rather than pretending the driver alone is a program.
+		return driver + "\n\n# WARNING: driver code is missing " + SolutionPlaceholder + " - submitted code appended below, may not compile/run correctly\n" + code
+	}
+
+	if sig.FuncName != "" {
+		return WrapPracticeCode(code, language, spec, sig)
+	}
+
+	return code
+}
+
 // WrapPracticeCode wraps a user's "logic-only" function in the stdin/stdout
 // boilerplate needed by Piston, so in practice mode the user only writes
 // the algorithm - not the I/O scaffolding.

@@ -83,7 +83,27 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  const json: APIResponse<T> = await res.json();
+
+  // A truly empty body (backend crashed mid-request, gateway timeout, proxy
+  // cut the connection, etc.) makes res.json() throw a cryptic "Unexpected
+  // end of JSON input" with no indication of what actually happened. Read as
+  // text first so we can surface something a person can act on instead.
+  const raw = await res.text();
+  let json: APIResponse<T> | null = null;
+  if (raw) {
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      throw new Error(
+        `Server returned an unreadable response (status ${res.status}). This usually means the backend crashed or timed out - check server logs.`
+      );
+    }
+  }
+  if (!json) {
+    throw new Error(
+      `Server returned an empty response (status ${res.status}). This usually means the backend crashed or timed out - check server logs.`
+    );
+  }
   if (!res.ok) throw new Error(json.message || 'Request failed');
   return json.data as T;
 }

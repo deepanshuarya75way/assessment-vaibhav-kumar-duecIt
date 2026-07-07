@@ -20,11 +20,17 @@ interface DuelEditorProps {
   onChange: (value: string) => void;
   readOnly?: boolean;
   onTabSwitch?: () => void;
-  // 'practice-raw' = match is in practice mode but the selected language has
-  // no wrapper (see judge/wrapper.go's supported cases) - the judge will run
-  // this language's code as a full program either way, so say so instead of
-  // showing the "write only solve()" message that would be false for it.
-  mode?: 'competitive' | 'practice' | 'practice-raw';
+  // Whether the judge wraps this code (function-only, LeetCode-style) or
+  // runs it raw (full program, stdin -> stdout). This is now driven purely
+  // by whether the problem has a signature + the language supports wrapping
+  // (see judge/wrapper.go) - it is NOT tied to competitive vs practice mode.
+  // A problem with a signature gets function-only editing in BOTH modes;
+  // a problem without one requires a full program in BOTH modes.
+  ioMode?: 'function' | 'raw';
+  // Whether this match affects ELO. Purely a match.mode concern, independent
+  // of ioMode above - e.g. a rated competitive match can still be
+  // function-only if the problem has a signature.
+  rated?: boolean;
   signature?: { funcName: string; params: string[] };
 }
 
@@ -44,7 +50,8 @@ export default function DuelEditor({
   onChange,
   readOnly = false,
   onTabSwitch,
-  mode = 'competitive',
+  ioMode = 'raw',
+  rated = false,
   signature,
 }: DuelEditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -120,25 +127,21 @@ export default function DuelEditor({
         {readOnly && (
           <span className="text-yellow-500 text-xs ml-auto">Reading phase — editor locked</span>
         )}
-        {!readOnly && mode === 'practice' && (
+        {!readOnly && ioMode === 'function' && (
           <span className="text-emerald-400 text-xs ml-auto">
-            💡 Practice — write only your{' '}
+            💡 Write only your{' '}
             <code className="bg-zinc-700 px-1 rounded">
               {signature?.funcName
                 ? `${signature.funcName}(${signature.params.join(', ')})`
                 : 'solve()'}
             </code>{' '}
             function, I/O is handled automatically
+            {rated ? ' · Rated' : ' · Not rated'}
           </span>
         )}
-        {!readOnly && mode === 'practice-raw' && (
-          <span className="text-yellow-400 text-xs ml-auto">
-            ⚠️ Practice mode isn&apos;t set up for this problem/language yet — write the full program (stdin → stdout)
-          </span>
-        )}
-        {!readOnly && mode === 'competitive' && (
+        {!readOnly && ioMode === 'raw' && (
           <span className="text-blue-400 text-xs ml-auto">
-            ⚡ Competitive — write the full program (stdin → stdout)
+            ⚡ Write the full program (stdin → stdout){rated ? ' · Rated' : ' · Not rated'}
           </span>
         )}
       </div>

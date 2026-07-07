@@ -20,6 +20,7 @@ interface Problem {
   tags: string[];
   inputSpec?: InputVar[];
   signature?: { funcName: string; returnType: ParamType };
+  driverCode?: Record<string, string>;
 }
 
 interface TestCase {
@@ -51,6 +52,7 @@ export default function AdminPage() {
     samples: [{ input: '', output: '' }],
     inputSpec: [],
     signature: { funcName: '', returnType: 'string' },
+    driverCode: {},
   });
   const [tcForm, setTCForm] = useState({
     input: '',
@@ -128,6 +130,7 @@ export default function AdminPage() {
         samples: [{ input: '', output: '' }],
         inputSpec: [],
         signature: { funcName: '', returnType: 'string' },
+        driverCode: {},
       });
       loadProblems();
       loadMonitor();
@@ -358,6 +361,23 @@ export default function AdminPage() {
                 />
               </div>
 
+              <div className="border-t border-[var(--cf-border)] pt-3">
+                <span className="text-xs font-bold block mb-1">Hand-Written Driver Code (optional, overrides auto-generation above)</span>
+                <p className="text-xs text-[var(--cf-muted)] mb-2">
+                  Leave blank to use the auto-generated wrapper from the Input Variables above.
+                  Fill in a language here only if you want to write the exact driver yourself -
+                  it takes priority over everything above for that language. Your driver must
+                  contain <code className="bg-[#f8f8f8] border border-[#ddd] px-1">{'##SOLUTION##'}</code>{' '}
+                  somewhere - the competitor&apos;s submitted code replaces that token verbatim.
+                  Everything else in your driver (imports, stdin parsing, calling their
+                  function/class, printing the result) is exactly what runs.
+                </p>
+                <DriverCodeBuilder
+                  driverCode={form.driverCode || {}}
+                  onChange={(driverCode) => setForm({ ...form, driverCode })}
+                />
+              </div>
+
               <button type="submit" className="cf-btn w-full py-2">Create</button>
             </form>
           </Modal>
@@ -470,7 +490,7 @@ function InputSpecBuilder({ spec, onChange }: { spec: InputVar[]; onChange: (spe
                 value={v.type}
                 onChange={(e) => update(i, { type: e.target.value as ParamType })}
               >
-                {PARAM_TYPES.map((t:any) => <option key={t} value={t}>{t}</option>)}
+                {PARAM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div className="flex items-center gap-3">
@@ -499,6 +519,63 @@ function InputSpecBuilder({ spec, onChange }: { spec: InputVar[]; onChange: (spe
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Per-language textareas for hand-written driver code. Only languages the
+// judge actually runs (see judge.go's languageMap) are offered - matches
+// the same list used elsewhere for auto-generated templates/starters.
+const DRIVER_LANGUAGES = ['python', 'javascript', 'go', 'cpp', 'java', 'c'];
+
+function DriverCodeBuilder({
+  driverCode,
+  onChange,
+}: {
+  driverCode: Record<string, string>;
+  onChange: (driverCode: Record<string, string>) => void;
+}) {
+  const [openLang, setOpenLang] = useState<string | null>(null);
+
+  const update = (lang: string, value: string) => {
+    const next = { ...driverCode };
+    if (value.trim()) {
+      next[lang] = value;
+    } else {
+      delete next[lang];
+    }
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-1">
+      {DRIVER_LANGUAGES.map((lang) => {
+        const hasContent = !!driverCode[lang]?.trim();
+        const isOpen = openLang === lang;
+        return (
+          <div key={lang} className="border border-[var(--cf-border)]">
+            <button
+              type="button"
+              onClick={() => setOpenLang(isOpen ? null : lang)}
+              className="w-full flex items-center justify-between px-2 py-1 text-xs font-bold bg-[#f8f8f8]"
+            >
+              <span>
+                {lang} {hasContent && <span className="text-green-700">● configured</span>}
+              </span>
+              <span>{isOpen ? '▲' : '▼'}</span>
+            </button>
+            {isOpen && (
+              <textarea
+                className="cf-input w-full font-mono text-xs p-2"
+                rows={8}
+                placeholder={`Driver code for ${lang} - must include ##SOLUTION##`}
+                value={driverCode[lang] || ''}
+                onChange={(e) => update(lang, e.target.value)}
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

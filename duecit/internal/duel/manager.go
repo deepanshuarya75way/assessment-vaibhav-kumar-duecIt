@@ -213,11 +213,12 @@ func (m *Manager) RunCode(ctx context.Context, matchID, userID primitive.ObjectI
 		return nil, err
 	}
 
-	// In practice mode wrap the user's logic-only code with stdin/stdout scaffolding
-	execCode := code
-	if match.Mode == models.ModePractice {
-		execCode = judge.WrapPracticeCode(code, language, problem.InputSpec, problem.Signature)
-	}
+	// BuildExecutable owns the fallback chain now: hand-written driver code
+	// first, then auto-generated signature wrapping, then raw passthrough.
+	// Mode no longer decides raw-vs-wrapped at all; it only decides ELO
+	// effect (finalizeMatch) and test-case scope (samples here vs all in
+	// Submit).
+	execCode := judge.BuildExecutable(code, language, problem.DriverCode, problem.InputSpec, problem.Signature)
 
 	testCases := judge.SamplesToTestCases(problem.Samples)
 	return m.judge.Evaluate(ctx, execCode, language, testCases)
@@ -259,11 +260,8 @@ func (m *Manager) SubmitCode(ctx context.Context, matchID, userID primitive.Obje
 		testCases = judge.SamplesToTestCases(problem.Samples)
 	}
 
-	// In practice mode wrap the user's logic-only code with stdin/stdout scaffolding
-	execCode := code
-	if match.Mode == models.ModePractice {
-		execCode = judge.WrapPracticeCode(code, language, problem.InputSpec, problem.Signature)
-	}
+	// Same as RunCode - see comment there for the fallback chain.
+	execCode := judge.BuildExecutable(code, language, problem.DriverCode, problem.InputSpec, problem.Signature)
 
 	result, err := m.judge.Evaluate(ctx, execCode, language, testCases)
 	if err != nil {

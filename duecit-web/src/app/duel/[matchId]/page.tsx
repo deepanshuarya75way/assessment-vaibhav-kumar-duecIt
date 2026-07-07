@@ -12,10 +12,10 @@ import DuelEditor, { getCodeLength } from '@/components/DuelEditor';
 import MatchTimer from '@/components/MatchTimer';
 import AntiCapture from '@/components/AntiCapture';
 
-// Languages the practice-mode wrapper actually supports (see judge/wrapper.go).
-// Keep this in sync with backend WrapPracticeCode's switch cases - anything
-// not in this list runs as a raw full program even when match.mode is 'practice'.
-const PRACTICE_SUPPORTED_LANGS = ['python', 'javascript', 'go'];
+// Languages the function-wrapper actually supports (see judge/wrapper.go).
+// Keep in sync with backend WrapPracticeCode's switch cases - anything not
+// in this list runs as a raw full program regardless of match mode.
+const WRAPPER_SUPPORTED_LANGS = ['python', 'javascript', 'go'];
 
 interface Problem {
   id: string;
@@ -28,6 +28,7 @@ interface Problem {
   samples: { input: string; output: string }[];
   starterCode?: Record<string, string>;
   signature?: { funcName: string; params: string[]; returnType: string };
+  driverLanguages?: string[];
 }
 
 interface Opponent {
@@ -345,15 +346,20 @@ export default function DuelPage() {
   const editorLocked = phase === 'reading';
   const watermark = `${user.username} · ${matchId.slice(-8)}`;
 
-  // What the judge will actually do for the current language, not just what
-  // the match was set up as - practice mode only wraps languages the
-  // wrapper supports (see PRACTICE_SUPPORTED_LANGS above).
-  const effectiveMode: 'competitive' | 'practice' | 'practice-raw' =
-    match.mode !== 'practice'
-      ? 'competitive'
-      : PRACTICE_SUPPORTED_LANGS.includes(language) && !!match.problem.signature?.funcName
-        ? 'practice'
-        : 'practice-raw';
+  // Whether the judge wraps this code (function-only) or runs it raw (full
+  // program). Two independent ways a language can end up function-only:
+  // a hand-written driver (admin wrote the I/O glue directly), or the
+  // auto-generated wrapper (admin filled in Input Variables + Signature).
+  // Either one qualifies - see judge.BuildExecutable's fallback chain.
+  // NOT tied to competitive vs practice: a competitive match on a problem
+  // with a driver/signature is just as function-only as a practice match.
+  const hasDriver = !!match.problem.driverLanguages?.includes(language);
+  const hasAutoWrapper =
+    WRAPPER_SUPPORTED_LANGS.includes(language) && !!match.problem.signature?.funcName;
+  const ioMode: 'function' | 'raw' = hasDriver || hasAutoWrapper ? 'function' : 'raw';
+  // Whether this match affects ELO - this is the actual practice/competitive
+  // distinction now (see finalizeMatch on the backend).
+  const rated = match.mode === 'competitive';
 
   return (
     <AntiCapture username={user.username} matchId={matchId}>
@@ -412,7 +418,7 @@ export default function DuelPage() {
               samples={match.problem.samples}
               difficulty={match.problem.difficulty}
               watermark={watermark}
-              mode={effectiveMode}
+              ioMode={ioMode}
               signature={match.problem.signature}
             />
           </div>
@@ -425,7 +431,8 @@ export default function DuelPage() {
                 onChange={setCode}
                 readOnly={editorLocked}
                 onTabSwitch={handleTabSwitch}
-                mode={effectiveMode}
+                ioMode={ioMode}
+                rated={rated}
                 signature={match.problem.signature}
               />
             </div>

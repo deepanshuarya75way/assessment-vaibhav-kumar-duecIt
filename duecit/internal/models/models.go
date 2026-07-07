@@ -80,9 +80,17 @@ type Problem struct {
 	StarterCode  map[string]string  `bson:"starterCode,omitempty" json:"starterCode,omitempty"`
 	InputSpec    []InputVar         `bson:"inputSpec,omitempty" json:"inputSpec,omitempty"`
 	Signature    FuncSignature      `bson:"signature,omitempty" json:"signature,omitempty"`
-	Version      int                `bson:"version" json:"version"`
-	CreatedAt    time.Time          `bson:"createdAt" json:"createdAt"`
-	UpdatedAt    time.Time          `bson:"updatedAt" json:"updatedAt"`
+	// DriverCode holds hand-written, per-language driver templates - an
+	// admin-authored alternative to the auto-generated InputSpec/Signature
+	// wrapper. Each entry should contain the judge.SolutionPlaceholder
+	// token somewhere; the submitted code is spliced in at that point
+	// verbatim. Deliberately NOT included on ProblemPublic - it's judge
+	// plumbing, not something a competitor needs to see, and may reveal
+	// harness/solution-shape details.
+	DriverCode map[string]string `bson:"driverCode,omitempty" json:"driverCode,omitempty"`
+	Version    int               `bson:"version" json:"version"`
+	CreatedAt  time.Time         `bson:"createdAt" json:"createdAt"`
+	UpdatedAt  time.Time         `bson:"updatedAt" json:"updatedAt"`
 }
 
 type TestCase struct {
@@ -171,22 +179,31 @@ type ProblemPublic struct {
 	Tags         []string          `json:"tags"`
 	StarterCode  map[string]string `json:"starterCode,omitempty"`
 	Signature    FuncSignature     `json:"signature,omitempty"`
+	// DriverLanguages: which languages have a hand-written driver
+	// configured, so the frontend can show "write only the function"
+	// without ever seeing the driver code itself.
+	DriverLanguages []string `json:"driverLanguages,omitempty"`
 }
 
 func (p *Problem) ToPublic() ProblemPublic {
+	var driverLangs []string
+	for lang := range p.DriverCode {
+		driverLangs = append(driverLangs, lang)
+	}
 	return ProblemPublic{
-		ID:           p.ProblemID,
-		Title:        p.Title,
-		Statement:    p.Statement,
-		InputFormat:  p.InputFormat,
-		OutputFormat: p.OutputFormat,
-		Constraints:  p.Constraints,
-		Samples:      p.Samples,
-		Category:     p.Category,
-		Difficulty:   p.Difficulty,
-		Tags:         p.Tags,
-		StarterCode:  p.StarterCode,
-		Signature:    p.Signature,
+		ID:              p.ProblemID,
+		Title:           p.Title,
+		Statement:       p.Statement,
+		InputFormat:     p.InputFormat,
+		OutputFormat:    p.OutputFormat,
+		Constraints:     p.Constraints,
+		Samples:         p.Samples,
+		Category:        p.Category,
+		Difficulty:      p.Difficulty,
+		Tags:            p.Tags,
+		StarterCode:     p.StarterCode,
+		Signature:       p.Signature,
+		DriverLanguages: driverLangs,
 	}
 }
 

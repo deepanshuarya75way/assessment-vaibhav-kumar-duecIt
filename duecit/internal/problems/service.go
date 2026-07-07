@@ -94,10 +94,7 @@ func (s *Service) UpdateProblem(ctx context.Context, problemID string, update bs
 }
 
 func (s *Service) DeleteProblem(ctx context.Context, problemID string) error {
-	// DeleteMany, not DeleteOne: if duplicate problemIds exist (pre-fix
-	// data, or a race before the unique index above was created), a delete
-	// needs to remove ALL of them, not silently leave one behind to
-	// resurface later and look like a "reset".
+	
 	_, err := s.problems.DeleteMany(ctx, bson.M{"problemId": problemID})
 	if err != nil {
 		return err

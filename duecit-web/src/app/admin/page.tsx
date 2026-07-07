@@ -333,8 +333,8 @@ export default function AdminPage() {
                 <Select label="Category" value={form.category || 'dsa'} onChange={(v) => setForm({ ...form, category: v })} options={['dsa', 'db']} />
                 <Select label="Difficulty" value={form.difficulty || 'easy'} onChange={(v) => setForm({ ...form, difficulty: v })} options={['easy', 'medium', 'hard']} />
               </div>
-              <Input label="Sample Input" value={form.samples?.[0]?.input || ''} onChange={(v) => setForm({ ...form, samples: [{ input: v, output: form.samples?.[0]?.output || '' }] })} />
-              <Input label="Sample Output" value={form.samples?.[0]?.output || ''} onChange={(v) => setForm({ ...form, samples: [{ input: form.samples?.[0]?.input || '', output: v }] })} />
+              <TextArea label="Sample Input" value={form.samples?.[0]?.input || ''} onChange={(v) => setForm({ ...form, samples: [{ input: v, output: form.samples?.[0]?.output || '' }] })} />
+              <TextArea label="Sample Output" value={form.samples?.[0]?.output || ''} onChange={(v) => setForm({ ...form, samples: [{ input: form.samples?.[0]?.input || '', output: v }] })} />
 
               <div className="border-t border-[var(--cf-border)] pt-3">
                 <span className="text-xs font-bold block mb-1">Practice Mode (optional)</span>

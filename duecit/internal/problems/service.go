@@ -3,6 +3,8 @@ package problems
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"math/rand"
 	"time"
 
@@ -19,13 +21,47 @@ type Service struct {
 }
 
 func NewService(db *mongo.Database) *Service {
-	return &Service{
+	s := &Service{
 		problems:  db.Collection("problems"),
 		testCases: db.Collection("testcases"),
+	}
+	s.ensureIndexes(context.Background())
+	return s
+}
+
+// ensureIndexes creates a unique index on problemId so a duplicate ID can
+// never be inserted again, at the database level, regardless of which code
+// path tries it (admin panel, seed script, a retried request after a
+// timeout, anything).
+//
+// IMPORTANT: if duplicate problemIds already exist in the database from
+// before this fix, MongoDB will refuse to create the unique index and this
+// will log an error every startup until you run DedupeProblems (below) once
+// to clean up the existing duplicates. This is intentionally non-fatal -
+// logged, not returned as an error - so a dirty existing database doesn't
+// prevent the server from starting; it just means the index (and therefore
+// this protection) isn't active yet.
+func (s *Service) ensureIndexes(ctx context.Context) {
+	_, err := s.problems.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "problemId", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	})
+	if err != nil {
+		log.Printf("WARNING: could not create unique index on problems.problemId (likely duplicate problemIds already exist - run problems.DedupeProblems once to fix): %v", err)
 	}
 }
 
 func (s *Service) CreateProblem(ctx context.Context, p *models.Problem) (*models.Problem, error) {
+	// Explicit existence check first, so admins get a clear "already exists"
+	// error message instead of a raw Mongo duplicate-key error if the
+	// unique index catches it instead. Belt-and-suspenders with the index
+	// above: this check has a small race window under concurrent requests,
+	// the index is what actually guarantees no duplicate ever lands.
+	existing, _ := s.GetProblem(ctx, p.ProblemID)
+	if existing != nil {
+		return nil, fmt.Errorf("a problem with ID %q already exists", p.ProblemID)
+	}
+
 	now := time.Now()
 	p.CreatedAt = now
 	p.UpdatedAt = now
@@ -37,6 +73,9 @@ func (s *Service) CreateProblem(ctx context.Context, p *models.Problem) (*models
 	}
 	res, err := s.problems.InsertOne(ctx, p)
 	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return nil, fmt.Errorf("a problem with ID %q already exists", p.ProblemID)
+		}
 		return nil, err
 	}
 	p.ID = res.InsertedID.(primitive.ObjectID)
@@ -55,7 +94,11 @@ func (s *Service) UpdateProblem(ctx context.Context, problemID string, update bs
 }
 
 func (s *Service) DeleteProblem(ctx context.Context, problemID string) error {
-	_, err := s.problems.DeleteOne(ctx, bson.M{"problemId": problemID})
+	// DeleteMany, not DeleteOne: if duplicate problemIds exist (pre-fix
+	// data, or a race before the unique index above was created), a delete
+	// needs to remove ALL of them, not silently leave one behind to
+	// resurface later and look like a "reset".
+	_, err := s.problems.DeleteMany(ctx, bson.M{"problemId": problemID})
 	if err != nil {
 		return err
 	}
@@ -144,6 +187,76 @@ func (s *Service) DeleteTestCase(ctx context.Context, id primitive.ObjectID) err
 
 func (s *Service) CountProblems(ctx context.Context) (int64, error) {
 	return s.problems.CountDocuments(ctx, bson.M{})
+}
+
+// DedupeProblems is a one-time cleanup for databases that already have
+// duplicate problemIds from before this fix (which is almost certainly the
+// case for this app's production database right now). For each problemId
+// with more than one document, it keeps the most recently updated one and
+// deletes the rest.
+//
+// Run this ONCE - e.g. temporarily call it from main.go after connecting to
+// Mongo, redeploy, check the logs for what it removed, then remove the call.
+// It's safe to run more than once (a no-op once no duplicates remain), but
+// it's not something that should run on every startup - it does real
+// deletes, and a startup-automatic version defeats the point of noticing
+// when duplicates reappear.
+func (s *Service) DedupeProblems(ctx context.Context) error {
+	pipeline := mongo.Pipeline{
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$problemId"},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+			{Key: "docs", Value: bson.D{{Key: "$push", Value: bson.D{
+				{Key: "id", Value: "$_id"},
+				{Key: "updatedAt", Value: "$updatedAt"},
+			}}}},
+		}}},
+		{{Key: "$match", Value: bson.D{{Key: "count", Value: bson.D{{Key: "$gt", Value: 1}}}}}},
+	}
+	cur, err := s.problems.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+	defer cur.Close(ctx)
+
+	type dupGroup struct {
+		ID   string `bson:"_id"`
+		Docs []struct {
+			ID        primitive.ObjectID `bson:"id"`
+			UpdatedAt time.Time          `bson:"updatedAt"`
+		} `bson:"docs"`
+	}
+
+	var groups []dupGroup
+	if err := cur.All(ctx, &groups); err != nil {
+		return err
+	}
+
+	for _, g := range groups {
+		if len(g.Docs) < 2 {
+			continue
+		}
+		// Keep the most recently updated; delete the rest.
+		keepIdx := 0
+		for i, d := range g.Docs {
+			if d.UpdatedAt.After(g.Docs[keepIdx].UpdatedAt) {
+				keepIdx = i
+			}
+		}
+		var toDelete []primitive.ObjectID
+		for i, d := range g.Docs {
+			if i != keepIdx {
+				toDelete = append(toDelete, d.ID)
+			}
+		}
+		res, err := s.problems.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": toDelete}})
+		if err != nil {
+			log.Printf("DedupeProblems: failed to clean up problemId %q: %v", g.ID, err)
+			continue
+		}
+		log.Printf("DedupeProblems: problemId %q had %d duplicates, removed %d, kept the most recently updated", g.ID, len(g.Docs), res.DeletedCount)
+	}
+	return nil
 }
 
 func defaultStarterCode() map[string]string {

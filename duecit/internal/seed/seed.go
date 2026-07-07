@@ -3,6 +3,7 @@ package seed
 import (
 	"context"
 	"log"
+	"os"
 	"time"
 
 	"github.com/duecit/duecit/internal/auth"
@@ -13,6 +14,18 @@ import (
 )
 
 func Run(ctx context.Context, db *mongo.Database) error {
+	// Opt-in only. Run() used to fire unconditionally on every server
+	// startup - meaning every redeploy would silently recreate any default
+	// problem you'd deliberately deleted, since the per-problem existence
+	// check below is correctly idempotent but has no way to distinguish
+	// "never existed" from "was deleted on purpose". Set SEED_ON_START=true
+	// only when you actually want to (re)seed - e.g. a genuinely fresh
+	// database - then unset it again before the next deploy.
+	if os.Getenv("SEED_ON_START") != "true" {
+		log.Println(`Seed skipped (SEED_ON_START not set to "true") - set it explicitly if you want to (re)seed default problems/admin user`)
+		return nil
+	}
+
 	probSvc := problems.NewService(db)
 	users := db.Collection("users")
 

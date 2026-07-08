@@ -143,13 +143,13 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.PistonURL+"/execute", bytes.NewReader(body))
 	if err != nil {
-		return models.TestResult{Passed: false, Error: err.Error(), ExecutionTime: 0}
+		return models.TestResult{Passed: false, Input: tc.Input, ExpectedOutput: tc.ExpectedOutput, Error: err.Error(), ExecutionTime: 0}
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return models.TestResult{Passed: false, Error: err.Error(), ExecutionTime: time.Since(start).Milliseconds()}
+		return models.TestResult{Passed: false, Input: tc.Input, ExpectedOutput: tc.ExpectedOutput, Error: err.Error(), ExecutionTime: time.Since(start).Milliseconds()}
 	}
 	defer resp.Body.Close()
 
@@ -157,10 +157,18 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 
 	// Piston returns a non-200 with a JSON {"message": "..."} body when the
 	// request itself is rejected (bad language/version, malformed payload,
-	// etc.) - that's a different failure mode than "the user's code ran and
-	// produced no output", and was previously indistinguishable from it:
-	// the zero-valued pistonResponse below has empty Stdout/Stderr either
-	// way, so this was silently showing as "(empty)" with no error at all.
+	// rate limited, etc.) - that's a different failure mode than "the
+	// user's code ran and produced no output".
+	//
+	// CRITICAL: every early-return TestResult below must still carry
+	// Input/ExpectedOutput. These fields are `json:"...,omitempty"` on
+	// models.TestResult - leaving them unset means an empty string, which
+	// omitempty then drops from the JSON response entirely, so the field
+	// arrives as `undefined` (not even null) on the frontend. Any frontend
+	// code doing tc.input.slice(...) without a guard crashes the whole
+	// page on exactly this path - which is intermittent by nature (Piston
+	// rate-limiting, network blips), making it look like a random crash
+	// instead of the systematic omission it actually is.
 	if resp.StatusCode != http.StatusOK {
 		var perr struct {
 			Message string `json:"message"`
@@ -171,15 +179,17 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 			msg = fmt.Sprintf("piston returned HTTP %d", resp.StatusCode)
 		}
 		return models.TestResult{
-			Passed:        false,
-			Error:         "execution engine error: " + msg,
-			ExecutionTime: time.Since(start).Milliseconds(),
+			Passed:         false,
+			Input:          tc.Input,
+			ExpectedOutput: tc.ExpectedOutput,
+			Error:          "execution engine error: " + msg,
+			ExecutionTime:  time.Since(start).Milliseconds(),
 		}
 	}
 
 	var pr pistonResponse
 	if err := json.Unmarshal(raw, &pr); err != nil {
-		return models.TestResult{Passed: false, Error: err.Error(), ExecutionTime: time.Since(start).Milliseconds()}
+		return models.TestResult{Passed: false, Input: tc.Input, ExpectedOutput: tc.ExpectedOutput, Error: err.Error(), ExecutionTime: time.Since(start).Milliseconds()}
 	}
 
 	stdout := strings.TrimSpace(pr.Run.Stdout)

@@ -305,10 +305,34 @@ export default function DuelPage() {
     try {
       const result = await api.submitCode(matchId, code, language, prevCodeLen.current) as {
         matchFinished: boolean;
+        submission?: {
+          passedCount?: number;
+          totalCount?: number;
+          isFullAC?: boolean;
+          testResults?: Array<{ passed: boolean; input: string; expectedOutput: string; actualOutput: string; error?: string }>;
+        };
       };
       prevCodeLen.current = getCodeLength(code);
       setSubmitted(true);
-      setRunResult('Submitted — waiting for opponent or timeout...');
+
+      const sub = result.submission;
+      if (sub?.testResults) {
+        setRunDetails(sub.testResults.map(r => ({
+          passed: r.passed,
+          input: r.input,
+          expected: r.expectedOutput,
+          actual: r.actualOutput,
+          error: r.error,
+        })));
+      }
+      const passed = sub?.passedCount ?? 0;
+      const total = sub?.totalCount ?? sub?.testResults?.length ?? 0;
+      setRunResult(
+        total > 0
+          ? `Submitted — ${passed}/${total} test cases passed. Waiting for opponent or timeout...`
+          : 'Submitted — waiting for opponent or timeout...'
+      );
+
       if (result.matchFinished) {
         setRunResult('Match completed. Loading results...');
         await fetchMatchResult();
@@ -477,8 +501,8 @@ export default function DuelPage() {
                       <span className="font-bold mr-2">{tc.passed ? '✓' : '✗'} Case {i + 1}</span>
                       {!tc.passed && (
                         <span className="text-zinc-400">
-                          in: <span className="text-white">{tc.input.slice(0, 40)}</span>
-                          {' | '}expected: <span className="text-green-300">{tc.expected.slice(0, 40)}</span>
+                          in: <span className="text-white">{(tc.input || '').slice(0, 40)}</span>
+                          {' | '}expected: <span className="text-green-300">{(tc.expected || '').slice(0, 40)}</span>
                           {' | '}got: <span className="text-red-300">{(tc.actual || tc.error || '(empty)').slice(0, 60)}</span>
                         </span>
                       )}

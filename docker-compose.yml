@@ -13,6 +13,17 @@ services:
     volumes:
       - redis_data:/data
 
+  piston:
+    image: ghcr.io/engineer-man/piston
+    privileged: true
+    ports:
+      - "2000:2000"
+    tmpfs:
+      - /piston/jobs:exec
+    volumes:
+      - piston_data:/piston
+
 volumes:
   mongo_data:
   redis_data:
+  piston_data:

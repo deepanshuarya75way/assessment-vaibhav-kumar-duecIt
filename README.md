@@ -15,6 +15,8 @@ Real-time 1v1 coding duels with ELO-based matchmaking, synchronized start times,
 docker compose up -d
 ```
 
+This starts MongoDB, Redis, and a local Piston API on `http://localhost:2000/api/v2`. Piston starts without language runtimes, so install the languages used by the judge before running submissions. See [docs/piston-selfhost-plan.md](docs/piston-selfhost-plan.md) for the package install flow and the production VPS setup.
+
 ### 2. Start Go API
 
 ```bash

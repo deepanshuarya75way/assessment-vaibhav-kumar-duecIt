@@ -8,17 +8,19 @@ import (
 )
 
 type Config struct {
-	Port                  string
-	NodeEnv               string
-	MongoURI              string
-	MongoDB               string
-	RedisURL              string
-	CORSOrigins           []string
-	AccessTokenSecret     string
-	AccessTokenExpiry     time.Duration
-	RefreshTokenSecret    string
-	RefreshTokenExpiry    time.Duration
-	PistonURL             string
+	Port                   string
+	NodeEnv                string
+	MongoURI               string
+	MongoDB                string
+	RedisURL               string
+	CORSOrigins            []string
+	AccessTokenSecret      string
+	AccessTokenExpiry      time.Duration
+	RefreshTokenSecret     string
+	RefreshTokenExpiry     time.Duration
+	PistonURL              string
+	PistonAuthUser         string
+	PistonAuthPass         string
 	ReadPhaseSeconds       int
 	CodingPhaseSeconds     int
 	EloRange               int
@@ -33,17 +35,23 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:                   getEnv("PORT", "8080"),
-		NodeEnv:                getEnv("NODE_ENV", "development"),
-		MongoURI:               getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		MongoDB:                getEnv("MONGO_DB", "duel_db"),
-		RedisURL:               getEnv("REDIS_URL", "redis://localhost:6379"),
-		CORSOrigins:            strings.Split(getEnv("CORS_ORIGIN", "http://localhost:3000"), ","),
-		AccessTokenSecret:      mustEnv("ACCESS_TOKEN_SECRET"),
-		AccessTokenExpiry:      parseDuration(getEnv("ACCESS_TOKEN_EXPIRY", "24h"), 24*time.Hour),
-		RefreshTokenSecret:     mustEnv("REFRESH_TOKEN_SECRET"),
-		RefreshTokenExpiry:     parseDuration(getEnv("REFRESH_TOKEN_EXPIRY", "168h"), 168*time.Hour),
-		PistonURL:              getEnv("PISTON_URL", "https://emkc.org/api/v2/piston"),
+		Port:               getEnv("PORT", "8080"),
+		NodeEnv:            getEnv("NODE_ENV", "development"),
+		MongoURI:           getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		MongoDB:            getEnv("MONGO_DB", "duel_db"),
+		RedisURL:           getEnv("REDIS_URL", "redis://localhost:6379"),
+		CORSOrigins:        strings.Split(getEnv("CORS_ORIGIN", "http://localhost:3000"), ","),
+		AccessTokenSecret:  mustEnv("ACCESS_TOKEN_SECRET"),
+		AccessTokenExpiry:  parseDuration(getEnv("ACCESS_TOKEN_EXPIRY", "24h"), 24*time.Hour),
+		RefreshTokenSecret: mustEnv("REFRESH_TOKEN_SECRET"),
+		RefreshTokenExpiry: parseDuration(getEnv("REFRESH_TOKEN_EXPIRY", "168h"), 168*time.Hour),
+		PistonURL:          getEnv("PISTON_URL", "https://emkc.org/api/v2/piston"),
+		// Only needed once Piston is self-hosted behind an auth-requiring
+		// reverse proxy (see docs/piston-selfhost-plan.md). Both empty is
+		// fine for a Piston instance with no auth in front of it (e.g. one
+		// only reachable from inside a private network).
+		PistonAuthUser:         getEnv("PISTON_AUTH_USER", ""),
+		PistonAuthPass:         getEnv("PISTON_AUTH_PASS", ""),
 		ReadPhaseSeconds:       getEnvInt("READ_PHASE_SECONDS", 45),
 		CodingPhaseSeconds:     getEnvInt("CODING_PHASE_SECONDS", 600),
 		EloRange:               getEnvInt("ELO_RANGE", 200),

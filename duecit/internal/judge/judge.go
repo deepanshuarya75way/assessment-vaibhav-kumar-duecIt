@@ -39,12 +39,12 @@ func NewService(cfg *config.Config) *Service {
 }
 
 type pistonRequest struct {
-	Language string       `json:"language"`
-	Version  string       `json:"version"`
-	Files    []pistonFile `json:"files"`
-	Stdin    string       `json:"stdin"`
-	RunTimeout      int `json:"run_timeout"`
-	CompileTimeout  int `json:"compile_timeout"`
+	Language       string       `json:"language"`
+	Version        string       `json:"version"`
+	Files          []pistonFile `json:"files"`
+	Stdin          string       `json:"stdin"`
+	RunTimeout     int          `json:"run_timeout"`
+	CompileTimeout int          `json:"compile_timeout"`
 }
 
 type pistonFile struct {
@@ -52,8 +52,8 @@ type pistonFile struct {
 }
 
 type pistonResponse struct {
-	Run     pistonRun     `json:"run"`
-	Compile *pistonRun    `json:"compile"`
+	Run     pistonRun  `json:"run"`
+	Compile *pistonRun `json:"compile"`
 }
 
 type pistonRun struct {
@@ -133,10 +133,10 @@ func (s *Service) Evaluate(ctx context.Context, code, language string, testCases
 func (s *Service) runTest(ctx context.Context, code, language string, tc models.TestCase) models.TestResult {
 	start := time.Now()
 	body, _ := json.Marshal(pistonRequest{
-		Language: language,
-		Version:  "*",
-		Files:    []pistonFile{{Content: code}},
-		Stdin:    tc.Input,
+		Language:       language,
+		Version:        "*",
+		Files:          []pistonFile{{Content: code}},
+		Stdin:          tc.Input,
 		RunTimeout:     3000,
 		CompileTimeout: 10000,
 	})
@@ -146,6 +146,9 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 		return models.TestResult{Passed: false, Input: tc.Input, ExpectedOutput: tc.ExpectedOutput, Error: err.Error(), ExecutionTime: 0}
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if s.cfg.PistonAuthUser != "" && s.cfg.PistonAuthPass != "" {
+		req.SetBasicAuth(s.cfg.PistonAuthUser, s.cfg.PistonAuthPass)
+	}
 
 	resp, err := s.client.Do(req)
 	if err != nil {

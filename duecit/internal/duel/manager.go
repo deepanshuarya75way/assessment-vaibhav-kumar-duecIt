@@ -219,9 +219,10 @@ func (m *Manager) RunCode(ctx context.Context, matchID, userID primitive.ObjectI
 	// effect (finalizeMatch) and test-case scope (samples here vs all in
 	// Submit).
 	execCode := judge.BuildExecutable(code, language, problem.DriverCode, problem.InputSpec, problem.Signature)
+	checker := judge.CheckerForProblem(problem)
 
 	testCases := judge.SamplesToTestCases(problem.Samples)
-	return m.judge.Evaluate(ctx, execCode, language, testCases)
+	return m.judge.Evaluate(ctx, execCode, language, testCases, checker)
 }
 
 func (m *Manager) SubmitCode(ctx context.Context, matchID, userID primitive.ObjectID, code, language string, prevCodeLen int) (*models.Submission, bool, error) {
@@ -262,8 +263,9 @@ func (m *Manager) SubmitCode(ctx context.Context, matchID, userID primitive.Obje
 
 	// Same as RunCode - see comment there for the fallback chain.
 	execCode := judge.BuildExecutable(code, language, problem.DriverCode, problem.InputSpec, problem.Signature)
+	checker := judge.CheckerForProblem(problem)
 
-	result, err := m.judge.Evaluate(ctx, execCode, language, testCases)
+	result, err := m.judge.Evaluate(ctx, execCode, language, testCases, checker)
 	if err != nil {
 		return nil, false, err
 	}

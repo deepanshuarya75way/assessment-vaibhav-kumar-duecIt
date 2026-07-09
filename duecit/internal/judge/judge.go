@@ -71,10 +71,16 @@ type EvalResult struct {
 	TestResults     []models.TestResult `json:"testResults,omitempty"`
 }
 
-func (s *Service) Evaluate(ctx context.Context, code, language string, testCases []models.TestCase) (*EvalResult, error) {
+type OutputChecker func(tc models.TestCase, actualOutput string) bool
+
+func (s *Service) Evaluate(ctx context.Context, code, language string, testCases []models.TestCase, checkers ...OutputChecker) (*EvalResult, error) {
 	pistonLang, ok := languageMap[language]
 	if !ok {
 		return nil, fmt.Errorf("unsupported language: %s", language)
+	}
+	var checker OutputChecker
+	if len(checkers) > 0 {
+		checker = checkers[0]
 	}
 
 	results := make([]models.TestResult, len(testCases))
@@ -87,7 +93,7 @@ func (s *Service) Evaluate(ctx context.Context, code, language string, testCases
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			results[idx] = s.runTest(ctx, code, pistonLang, testCase)
+			results[idx] = s.runTest(ctx, code, pistonLang, testCase, checker)
 		}(i, tc)
 	}
 	wg.Wait()
@@ -130,7 +136,7 @@ func (s *Service) Evaluate(ctx context.Context, code, language string, testCases
 	}, nil
 }
 
-func (s *Service) runTest(ctx context.Context, code, language string, tc models.TestCase) models.TestResult {
+func (s *Service) runTest(ctx context.Context, code, language string, tc models.TestCase, checker OutputChecker) models.TestResult {
 	start := time.Now()
 	body, _ := json.Marshal(pistonRequest{
 		Language:       language,
@@ -201,7 +207,7 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 		stderr = pr.Compile.Stderr
 	}
 
-	passed := normalizeOutput(stdout) == normalizeOutput(tc.ExpectedOutput)
+	passed := outputMatches(tc, stdout, checker)
 	errMsg := ""
 	if stderr != "" {
 		errMsg = stderr
@@ -215,6 +221,16 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 		ExecutionTime:  time.Since(start).Milliseconds(),
 		Error:          errMsg,
 	}
+}
+
+func outputMatches(tc models.TestCase, actual string, checker OutputChecker) bool {
+	if normalizeOutput(actual) == normalizeOutput(tc.ExpectedOutput) {
+		return true
+	}
+	if checker == nil {
+		return false
+	}
+	return checker(tc, actual)
 }
 
 func normalizeOutput(s string) string {

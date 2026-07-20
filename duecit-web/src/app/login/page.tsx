@@ -19,7 +19,10 @@ export default function LoginPage() {
   useEffect(() => {
     api.getOAuthProviders().then(setProviders).catch(() => {});
     const params = new URLSearchParams(window.location.search);
-    if (params.get('error')) setError(params.get('error') || 'Login failed');
+    const authError = params.get('error');
+    if (!authError) return;
+    const id = setTimeout(() => setError(authError || 'Login failed'), 0);
+    return () => clearTimeout(id);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

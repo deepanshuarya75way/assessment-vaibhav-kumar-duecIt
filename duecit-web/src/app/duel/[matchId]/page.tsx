@@ -69,6 +69,7 @@ export default function DuelPage() {
   const matchId = params.matchId as string;
 
   const [match, setMatch] = useState<MatchState | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [phase, setPhase] = useState<'reading' | 'coding' | 'finished'>('reading');
   const [language, setLanguage] = useState('python');
   const [code, setCode] = useState('');
@@ -105,6 +106,7 @@ export default function DuelPage() {
       readPhaseSec: data.readPhaseSec as number,
     };
     setMatch(m);
+    setLoadError('');
 
     // Only load starter code ONCE — never overwrite the user's typed code
     if (!matchInitialized.current) {
@@ -181,10 +183,12 @@ export default function DuelPage() {
     if (token) wsClient.connect(token).catch(() => {});
 
     const loadMatch = async () => {
+      let loadedFromStorage = false;
       const stored = sessionStorage.getItem(`match:${matchId}`);
       if (stored) {
         try {
           initMatch(JSON.parse(stored));
+          loadedFromStorage = true;
         } catch { /* fall through */ }
       }
       try {
@@ -196,8 +200,14 @@ export default function DuelPage() {
               (details as Record<string, unknown>).status === 'finished') {
             await fetchMatchResult();
           }
+        } else if (!loadedFromStorage) {
+          setLoadError('Match data was not available. The match may have expired or been removed.');
         }
-      } catch { /* waiting for ws */ }
+      } catch (err) {
+        if (!loadedFromStorage) {
+          setLoadError(err instanceof Error ? err.message : 'Could not load match data.');
+        }
+      }
     };
     loadMatch();
 
@@ -248,7 +258,8 @@ export default function DuelPage() {
 
   useEffect(() => {
     if (phase !== 'finished' && !results && match && Date.now() >= match.codingEndsAt) {
-      fetchMatchResult().catch(() => {});
+      const id = setTimeout(() => fetchMatchResult().catch(() => {}), 0);
+      return () => clearTimeout(id);
     }
   }, [phase, results, match, fetchMatchResult]);
 
@@ -258,7 +269,7 @@ export default function DuelPage() {
       fetchMatchResult().catch(() => {});
     }, 2000);
     return () => clearInterval(id);
-  }, [submitted, results, fetchMatchResult]);
+  }, [submitted, results, phase, fetchMatchResult]);
 
   const handleLanguageChange = (lang: string) => {
     setLanguage(lang);
@@ -375,7 +386,25 @@ export default function DuelPage() {
       <div className="min-h-screen">
         <AppNav />
         <div className="flex flex-col items-center justify-center gap-4 p-12">
-          <div className="text-[var(--cf-blue)] font-bold animate-pulse">Waiting for match data...</div>
+          {loadError ? (
+            <>
+              <div className="cf-panel p-4 max-w-md text-center">
+                <div className="font-bold text-red-600 mb-2">Could not load duel</div>
+                <p className="text-sm text-[var(--cf-muted)]">{loadError}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setLoadError('');
+                  window.location.reload();
+                }}
+                className="cf-btn px-4 py-2"
+              >
+                Retry
+              </button>
+            </>
+          ) : (
+            <div className="text-[var(--cf-blue)] font-bold animate-pulse">Waiting for match data...</div>
+          )}
           <Link href="/dashboard" className="text-[var(--cf-blue)] underline text-sm">Back to Dashboard</Link>
         </div>
       </div>

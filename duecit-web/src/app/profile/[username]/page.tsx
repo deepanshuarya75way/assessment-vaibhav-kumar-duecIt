@@ -18,7 +18,6 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!loading && !user) {
-      setProfile(null);
       router.push('/login');
     }
   }, [user, loading, router]);

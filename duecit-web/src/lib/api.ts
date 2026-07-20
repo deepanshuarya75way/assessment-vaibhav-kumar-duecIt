@@ -62,6 +62,22 @@ export interface ActiveMatch {
   startTime: string;
 }
 
+export interface ProblemImportItemResult {
+  problemId: string;
+  title: string;
+  status: 'created' | 'overwritten' | 'skipped' | 'failed';
+  testCases: number;
+  error?: string;
+}
+
+export interface ProblemImportResult {
+  created: number;
+  overwritten: number;
+  skipped: number;
+  failed: number;
+  items: ProblemImportItemResult[];
+}
+
 export interface APIResponse<T = unknown> {
   success: boolean;
   status: number;
@@ -173,6 +189,12 @@ export const api = {
 
   createProblem: (problem: Record<string, unknown>) =>
     request('/api/admin/problems', { method: 'POST', body: JSON.stringify(problem) }),
+
+  importProblems: (mode: 'skip' | 'overwrite', problems: Record<string, unknown>[]) =>
+    request<ProblemImportResult>('/api/admin/problems/import', {
+      method: 'POST',
+      body: JSON.stringify({ mode, problems }),
+    }),
 
   updateProblem: (id: string, problem: Record<string, unknown>) =>
     request(`/api/admin/problems/${id}`, { method: 'PUT', body: JSON.stringify(problem) }),

@@ -3,8 +3,19 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { api, AdminStats, ActiveMatch, InputVar, ParamType, PARAM_TYPES } from '@/lib/api';
+import { api, AdminStats, ActiveMatch, InputVar, ParamType, PARAM_TYPES, ProblemImportResult } from '@/lib/api';
 import AppNav from '@/components/AppNav';
+
+interface TestCase {
+  id: string;
+  input: string;
+  expectedOutput: string;
+  sizeBucket: string;
+  weight: number;
+  isHidden: boolean;
+}
+
+type TestCaseInput = Omit<TestCase, 'id'>;
 
 interface Problem {
   id?: string;
@@ -19,20 +30,30 @@ interface Problem {
   difficulty: string;
   tags: string[];
   inputSpec?: InputVar[];
-  signature?: { funcName: string; returnType: ParamType };
+  signature?: { funcName: string; params?: string[]; returnType: ParamType };
   driverCode?: Record<string, string>;
-}
-
-interface TestCase {
-  id: string;
-  input: string;
-  expectedOutput: string;
-  sizeBucket: string;
-  weight: number;
-  isHidden: boolean;
+  testCases?: TestCaseInput[];
 }
 
 type Tab = 'monitor' | 'problems';
+
+const emptyProblemForm = (): Partial<Problem> => ({
+  category: 'dsa',
+  difficulty: 'easy',
+  tags: [],
+  samples: [{ input: '', output: '' }],
+  inputSpec: [],
+  signature: { funcName: '', returnType: 'string' },
+  driverCode: {},
+});
+
+const emptyTestCase = (): TestCaseInput => ({
+  input: '',
+  expectedOutput: '',
+  sizeBucket: 'small',
+  weight: 10,
+  isHidden: true,
+});
 
 export default function AdminPage() {
   const { user, loading } = useAuth();
@@ -44,23 +65,14 @@ export default function AdminPage() {
   const [selected, setSelected] = useState<Problem | null>(null);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingProblemId, setEditingProblemId] = useState<string | null>(null);
   const [showTCForm, setShowTCForm] = useState(false);
-  const [form, setForm] = useState<Partial<Problem>>({
-    category: 'dsa',
-    difficulty: 'easy',
-    tags: [],
-    samples: [{ input: '', output: '' }],
-    inputSpec: [],
-    signature: { funcName: '', returnType: 'string' },
-    driverCode: {},
-  });
-  const [tcForm, setTCForm] = useState({
-    input: '',
-    expectedOutput: '',
-    sizeBucket: 'small',
-    weight: 10,
-    isHidden: true,
-  });
+  const [form, setForm] = useState<Partial<Problem>>(emptyProblemForm);
+  const [formTestCases, setFormTestCases] = useState<TestCaseInput[]>([]);
+  const [tcForm, setTCForm] = useState<TestCaseInput>(emptyTestCase);
+  const [importMode, setImportMode] = useState<'skip' | 'overwrite'>('skip');
+  const [importText, setImportText] = useState('');
+  const [importResult, setImportResult] = useState<ProblemImportResult | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -76,7 +88,7 @@ export default function AdminPage() {
     }
   }, [user]);
 
-  const loadMonitor = async () => {
+  async function loadMonitor() {
     try {
       const [s, m] = await Promise.all([api.adminStats(), api.adminActiveMatches()]);
       setStats(s);
@@ -84,58 +96,131 @@ export default function AdminPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load stats');
     }
-  };
+  }
 
-  const loadProblems = async () => {
+  async function loadProblems() {
     try {
       const list = await api.listProblems() as Problem[];
       setProblems(list || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load problems');
     }
-  };
+  }
 
-  const loadTestCases = async (problemId: string) => {
+  async function loadTestCases(problemId: string) {
     try {
       const list = await api.getTestCases(problemId) as TestCase[];
       setTestCases(list || []);
     } catch {
       setTestCases([]);
     }
+  }
+
+  const buildProblemPayload = () => {
+    const inputSpec = form.inputSpec || [];
+    const hasSignature = !!form.signature?.funcName;
+    return {
+      ...form,
+      problemId: editingProblemId ? undefined : form.problemId || undefined,
+      tags: form.tags || [],
+      samples: form.samples?.length ? form.samples : [{ input: '', output: '' }],
+      inputSpec: inputSpec.length ? inputSpec : undefined,
+      signature: hasSignature
+        ? {
+            funcName: form.signature!.funcName,
+            returnType: form.signature!.returnType,
+            params: inputSpec.filter((v) => v.passToFunc).map((v) => v.name),
+          }
+        : undefined,
+      testCases: undefined,
+    };
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const beginCreate = () => {
+    setEditingProblemId(null);
+    setForm(emptyProblemForm());
+    setFormTestCases([]);
+    setShowForm(true);
+  };
+
+  const beginEdit = (problem: Problem) => {
+    setEditingProblemId(problem.problemId);
+    setForm({
+      problemId: problem.problemId,
+      title: problem.title,
+      statement: problem.statement,
+      inputFormat: problem.inputFormat,
+      outputFormat: problem.outputFormat,
+      constraints: problem.constraints,
+      category: problem.category,
+      difficulty: problem.difficulty,
+      tags: problem.tags || [],
+      samples: problem.samples?.length ? problem.samples : [{ input: '', output: '' }],
+      inputSpec: problem.inputSpec || [],
+      signature: {
+        funcName: problem.signature?.funcName || '',
+        returnType: problem.signature?.returnType || 'string',
+      },
+      driverCode: problem.driverCode || {},
+    });
+    setFormTestCases([]);
+    setShowForm(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const inputSpec = form.inputSpec || [];
-      const hasSignature = !!form.signature?.funcName;
-      const payload = {
-        ...form,
-        problemId: form.problemId || undefined,
-        inputSpec: inputSpec.length ? inputSpec : undefined,
-        signature: hasSignature
-          ? {
-              funcName: form.signature!.funcName,
-              returnType: form.signature!.returnType,
-              params: inputSpec.filter((v) => v.passToFunc).map((v) => v.name),
-            }
-          : undefined,
-      };
-      await api.createProblem(payload);
+      const payload = buildProblemPayload();
+      let saved: Problem | null = null;
+      if (editingProblemId) {
+        saved = (await api.updateProblem(editingProblemId, payload)) as Problem;
+      } else {
+        saved = (await api.createProblem(payload)) as Problem;
+        for (const tc of formTestCases) {
+          if (!tc.input.trim() && !tc.expectedOutput.trim()) continue;
+          await api.addTestCase(saved.problemId, tc);
+        }
+      }
       setShowForm(false);
-      setForm({
-        category: 'dsa',
-        difficulty: 'easy',
-        tags: [],
-        samples: [{ input: '', output: '' }],
-        inputSpec: [],
-        signature: { funcName: '', returnType: 'string' },
-        driverCode: {},
-      });
-      loadProblems();
-      loadMonitor();
+      setEditingProblemId(null);
+      setForm(emptyProblemForm());
+      setFormTestCases([]);
+      await loadProblems();
+      await loadMonitor();
+      if (saved) {
+        setSelected(saved);
+        loadTestCases(saved.problemId);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Create failed');
+      setError(err instanceof Error ? err.message : 'Save failed');
+    }
+  };
+
+  const handleImportFile = async (file: File | null) => {
+    if (!file) return;
+    setImportText(await file.text());
+  };
+
+  const handleBulkImport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setImportResult(null);
+    try {
+      const parsed = JSON.parse(importText) as unknown;
+      const problemsToImport = Array.isArray(parsed)
+        ? parsed
+        : typeof parsed === 'object' && parsed !== null && Array.isArray((parsed as { problems?: unknown }).problems)
+          ? (parsed as { problems: unknown[] }).problems
+          : null;
+      if (!problemsToImport) {
+        throw new Error('Import JSON must be an array, or an object with a problems array');
+      }
+      const result = await api.importProblems(importMode, problemsToImport as Record<string, unknown>[]);
+      setImportResult(result);
+      await loadProblems();
+      await loadMonitor();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed');
     }
   };
 
@@ -153,7 +238,7 @@ export default function AdminPage() {
     try {
       await api.addTestCase(selected.problemId, tcForm);
       setShowTCForm(false);
-      setTCForm({ input: '', expectedOutput: '', sizeBucket: 'small', weight: 10, isHidden: true });
+      setTCForm(emptyTestCase());
       loadTestCases(selected.problemId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add test case');
@@ -250,11 +335,57 @@ export default function AdminPage() {
         )}
 
         {tab === 'problems' && (
+          <>
+          <div className="cf-panel p-3 mb-4">
+            <form onSubmit={handleBulkImport} className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-bold text-sm">Bulk Import JSON</h2>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="cf-select text-xs"
+                    value={importMode}
+                    onChange={(e) => setImportMode(e.target.value as 'skip' | 'overwrite')}
+                  >
+                    <option value="skip">Append only</option>
+                    <option value="overwrite">Overwrite matching IDs</option>
+                  </select>
+                  <input
+                    type="file"
+                    accept="application/json,.json"
+                    className="text-xs"
+                    onChange={(e) => handleImportFile(e.target.files?.[0] || null)}
+                  />
+                  <button type="submit" className="cf-btn text-xs px-3 py-1">Import</button>
+                </div>
+              </div>
+              <textarea
+                className="cf-input w-full min-h-28 font-mono text-xs"
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder='[{"problemId":"P101","title":"Two Sum","testCases":[...]}]'
+              />
+              {importResult && (
+                <div className="text-xs border border-[var(--cf-border)] p-2">
+                  <div className="font-bold mb-1">
+                    Created {importResult.created} · Overwritten {importResult.overwritten} · Skipped {importResult.skipped} · Failed {importResult.failed}
+                  </div>
+                  <div className="max-h-28 overflow-y-auto space-y-0.5">
+                    {importResult.items.map((item, idx) => (
+                      <div key={`${item.problemId}-${item.status}-${idx}`} className={item.status === 'failed' ? 'text-red-600' : 'text-[var(--cf-muted)]'}>
+                        {item.problemId || '(missing id)'} · {item.status} · {item.testCases} tests{item.error ? ` · ${item.error}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </form>
+          </div>
+
           <div className="grid grid-cols-3 gap-4">
             <div className="col-span-1 cf-panel p-3">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-sm">Problems</h2>
-                <button onClick={() => setShowForm(true)} className="cf-btn text-xs px-2 py-1">+ New</button>
+                <button onClick={beginCreate} className="cf-btn text-xs px-2 py-1">+ New</button>
               </div>
               <div className="space-y-1 max-h-[70vh] overflow-y-auto">
                 {problems.map((p) => (
@@ -287,9 +418,14 @@ export default function AdminPage() {
                       <h2 className="text-lg font-bold">{selected.title}</h2>
                       <p className="text-xs text-[var(--cf-muted)]">{selected.problemId}</p>
                     </div>
-                    <button onClick={() => handleDelete(selected.problemId)} className="text-red-600 text-xs underline">
-                      Delete
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => beginEdit(selected)} className="text-[var(--cf-blue)] text-xs underline">
+                        Edit
+                      </button>
+                      <button onClick={() => handleDelete(selected.problemId)} className="text-red-600 text-xs underline">
+                        Delete
+                      </button>
+                    </div>
                   </div>
                   <p className="text-sm mb-4 whitespace-pre-wrap">{selected.statement}</p>
                   <div className="flex justify-between mb-2">
@@ -318,12 +454,21 @@ export default function AdminPage() {
               )}
             </div>
           </div>
+          </>
         )}
 
         {showForm && (
-          <Modal onClose={() => setShowForm(false)} title="Create Problem">
-            <form onSubmit={handleCreate} className="space-y-3">
-              <Input label="Problem ID (optional)" value={form.problemId || ''} onChange={(v) => setForm({ ...form, problemId: v })} />
+          <Modal
+            onClose={() => {
+              setShowForm(false);
+              setEditingProblemId(null);
+            }}
+            title={editingProblemId ? 'Edit Problem' : 'Create Problem'}
+          >
+            <form onSubmit={handleSave} className="space-y-3">
+              {!editingProblemId && (
+                <Input label="Problem ID (optional)" value={form.problemId || ''} onChange={(v) => setForm({ ...form, problemId: v })} />
+              )}
               <Input label="Title" value={form.title || ''} onChange={(v) => setForm({ ...form, title: v })} required />
               <TextArea label="Statement" value={form.statement || ''} onChange={(v) => setForm({ ...form, statement: v })} required />
               <TextArea label="Input Format" value={form.inputFormat || ''} onChange={(v) => setForm({ ...form, inputFormat: v })} required />
@@ -333,8 +478,19 @@ export default function AdminPage() {
                 <Select label="Category" value={form.category || 'dsa'} onChange={(v) => setForm({ ...form, category: v })} options={['dsa', 'db']} />
                 <Select label="Difficulty" value={form.difficulty || 'easy'} onChange={(v) => setForm({ ...form, difficulty: v })} options={['easy', 'medium', 'hard']} />
               </div>
+              <Input
+                label="Tags"
+                value={(form.tags || []).join(', ')}
+                onChange={(v) => setForm({ ...form, tags: v.split(',').map((tag) => tag.trim()).filter(Boolean) })}
+              />
               <TextArea label="Sample Input" value={form.samples?.[0]?.input || ''} onChange={(v) => setForm({ ...form, samples: [{ input: v, output: form.samples?.[0]?.output || '' }] })} />
               <TextArea label="Sample Output" value={form.samples?.[0]?.output || ''} onChange={(v) => setForm({ ...form, samples: [{ input: form.samples?.[0]?.input || '', output: v }] })} />
+
+              {!editingProblemId && (
+                <div className="border-t border-[var(--cf-border)] pt-3">
+                  <TestCaseBuilder cases={formTestCases} onChange={setFormTestCases} />
+                </div>
+              )}
 
               <div className="border-t border-[var(--cf-border)] pt-3">
                 <span className="text-xs font-bold block mb-1">Practice Mode (optional)</span>
@@ -378,7 +534,7 @@ export default function AdminPage() {
                 />
               </div>
 
-              <button type="submit" className="cf-btn w-full py-2">Create</button>
+              <button type="submit" className="cf-btn w-full py-2">{editingProblemId ? 'Save Changes' : 'Create'}</button>
             </form>
           </Modal>
         )}
@@ -443,6 +599,47 @@ function Select({ label, value, onChange, options }: { label: string; value: str
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     </label>
+  );
+}
+
+function TestCaseBuilder({ cases, onChange }: { cases: TestCaseInput[]; onChange: (cases: TestCaseInput[]) => void }) {
+  const update = (i: number, patch: Partial<TestCaseInput>) => {
+    const next = cases.slice();
+    next[i] = { ...next[i], ...patch };
+    onChange(next);
+  };
+  const remove = (i: number) => onChange(cases.filter((_, idx) => idx !== i));
+  const add = () => onChange([...cases, emptyTestCase()]);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-bold">Test Cases</span>
+        <button type="button" onClick={add} className="cf-btn-secondary text-xs px-2 py-0.5">+ Add test</button>
+      </div>
+      <div className="space-y-2">
+        {cases.map((tc, i) => (
+          <div key={i} className="border border-[var(--cf-border)] p-2 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold">Test {i + 1}</span>
+              <button type="button" onClick={() => remove(i)} className="text-red-600 text-xs">Delete</button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <TextArea label="Input" value={tc.input} onChange={(v) => update(i, { input: v })} />
+              <TextArea label="Expected Output" value={tc.expectedOutput} onChange={(v) => update(i, { expectedOutput: v })} />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Select label="Size" value={tc.sizeBucket} onChange={(v) => update(i, { sizeBucket: v })} options={['small', 'medium', 'large']} />
+              <Input label="Weight" value={String(tc.weight)} onChange={(v) => update(i, { weight: parseInt(v, 10) || 10 })} />
+              <label className="flex items-end gap-2 text-xs pb-2">
+                <input type="checkbox" checked={tc.isHidden} onChange={(e) => update(i, { isHidden: e.target.checked })} />
+                Hidden
+              </label>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

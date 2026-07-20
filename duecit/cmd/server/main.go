@@ -127,6 +127,7 @@ func main() {
 			admin.Use(auth.AdminMiddleware)
 			admin.Get("/problems", h.AdminListProblems)
 			admin.Post("/problems", h.AdminCreateProblem)
+			admin.Post("/problems/import", h.AdminImportProblems)
 			admin.Put("/problems/{id}", h.AdminUpdateProblem)
 			admin.Delete("/problems/{id}", h.AdminDeleteProblem)
 			admin.Get("/problems/{id}/testcases", h.AdminGetTestCases)

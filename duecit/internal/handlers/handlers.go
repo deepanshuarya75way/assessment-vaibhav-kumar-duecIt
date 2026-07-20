@@ -356,8 +356,63 @@ func (h *Handlers) AdminCreateProblem(w http.ResponseWriter, r *http.Request) {
 	if p.ProblemID == "" {
 		p.ProblemID = "P" + strings.ToUpper(primitive.NewObjectID().Hex()[:6])
 	}
+	prepareProblemForSave(&p)
+	created, err := h.Problems.CreateProblem(r.Context(), &p)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusCreated, "Problem created", created)
+}
+
+type adminImportProblemsReq struct {
+	Mode     string                   `json:"mode"`
+	Problems []problems.ProblemImport `json:"problems"`
+}
+
+func (h *Handlers) AdminImportProblems(w http.ResponseWriter, r *http.Request) {
+	var raw json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid request")
+		return
+	}
+
+	req := adminImportProblemsReq{Mode: string(problems.ImportModeSkip)}
+	if err := json.Unmarshal(raw, &req); err != nil || len(req.Problems) == 0 {
+		var items []problems.ProblemImport
+		if arrErr := json.Unmarshal(raw, &items); arrErr != nil {
+			response.Error(w, http.StatusBadRequest, "Expected { mode, problems } or a raw problem array")
+			return
+		}
+		req.Problems = items
+	}
+	if len(req.Problems) == 0 {
+		response.Error(w, http.StatusBadRequest, "No problems provided")
+		return
+	}
+
+	for i := range req.Problems {
+		prepareProblemForSave(&req.Problems[i].Problem)
+	}
+
+	result, err := h.Problems.ImportProblems(r.Context(), req.Problems, problems.ImportMode(req.Mode))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, "Problems imported", result)
+}
+
+func prepareProblemForSave(p *models.Problem) {
 	if p.StarterCode == nil {
 		p.StarterCode = map[string]string{}
+	}
+	if p.Signature.FuncName != "" && len(p.Signature.Params) == 0 {
+		for _, v := range p.InputSpec {
+			if v.PassToFunc {
+				p.Signature.Params = append(p.Signature.Params, v.Name)
+			}
+		}
 	}
 	// Competitive-mode syntax boilerplate (bare language keys, e.g. "python"):
 	// fill in only where the admin didn't already provide one.
@@ -376,12 +431,6 @@ func (h *Handlers) AdminCreateProblem(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	created, err := h.Problems.CreateProblem(r.Context(), &p)
-	if err != nil {
-		response.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	response.JSON(w, http.StatusCreated, "Problem created", created)
 }
 
 func (h *Handlers) AdminUpdateProblem(w http.ResponseWriter, r *http.Request) {

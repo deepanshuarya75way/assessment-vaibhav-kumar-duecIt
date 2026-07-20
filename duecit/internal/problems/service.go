@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/duecit/duecit/internal/models"
@@ -18,6 +19,34 @@ import (
 type Service struct {
 	problems  *mongo.Collection
 	testCases *mongo.Collection
+}
+
+type ImportMode string
+
+const (
+	ImportModeSkip      ImportMode = "skip"
+	ImportModeOverwrite ImportMode = "overwrite"
+)
+
+type ProblemImport struct {
+	models.Problem
+	TestCases []models.TestCase `json:"testCases"`
+}
+
+type ImportItemResult struct {
+	ProblemID string `json:"problemId"`
+	Title     string `json:"title"`
+	Status    string `json:"status"`
+	TestCases int    `json:"testCases"`
+	Error     string `json:"error,omitempty"`
+}
+
+type ImportResult struct {
+	Created     int                `json:"created"`
+	Overwritten int                `json:"overwritten"`
+	Skipped     int                `json:"skipped"`
+	Failed      int                `json:"failed"`
+	Items       []ImportItemResult `json:"items"`
 }
 
 func NewService(db *mongo.Database) *Service {
@@ -82,6 +111,151 @@ func (s *Service) CreateProblem(ctx context.Context, p *models.Problem) (*models
 	return p, nil
 }
 
+func (s *Service) ImportProblems(ctx context.Context, items []ProblemImport, mode ImportMode) (*ImportResult, error) {
+	if mode == "" {
+		mode = ImportModeSkip
+	}
+	if mode != ImportModeSkip && mode != ImportModeOverwrite {
+		return nil, fmt.Errorf("unsupported import mode %q", mode)
+	}
+
+	result := &ImportResult{
+		Items: make([]ImportItemResult, 0, len(items)),
+	}
+	for _, item := range items {
+		p := item.Problem
+		p.ProblemID = strings.TrimSpace(p.ProblemID)
+		row := ImportItemResult{
+			ProblemID: p.ProblemID,
+			Title:     p.Title,
+			TestCases: len(item.TestCases),
+		}
+
+		if err := validateProblemForImport(&p); err != nil {
+			row.Status = "failed"
+			row.Error = err.Error()
+			result.Failed++
+			result.Items = append(result.Items, row)
+			continue
+		}
+
+		existing, err := s.GetProblem(ctx, p.ProblemID)
+		if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+			row.Status = "failed"
+			row.Error = err.Error()
+			result.Failed++
+			result.Items = append(result.Items, row)
+			continue
+		}
+
+		if existing != nil {
+			if mode == ImportModeSkip {
+				row.Status = "skipped"
+				result.Skipped++
+				result.Items = append(result.Items, row)
+				continue
+			}
+			if err := s.replaceProblemAndTestCases(ctx, existing, &p, item.TestCases); err != nil {
+				row.Status = "failed"
+				row.Error = err.Error()
+				result.Failed++
+				result.Items = append(result.Items, row)
+				continue
+			}
+			row.Status = "overwritten"
+			result.Overwritten++
+			result.Items = append(result.Items, row)
+			continue
+		}
+
+		if _, err := s.CreateProblem(ctx, &p); err != nil {
+			row.Status = "failed"
+			row.Error = err.Error()
+			result.Failed++
+			result.Items = append(result.Items, row)
+			continue
+		}
+		if err := s.replaceTestCases(ctx, p.ProblemID, item.TestCases); err != nil {
+			row.Status = "failed"
+			row.Error = err.Error()
+			result.Failed++
+			result.Items = append(result.Items, row)
+			continue
+		}
+		row.Status = "created"
+		result.Created++
+		result.Items = append(result.Items, row)
+	}
+
+	return result, nil
+}
+
+func (s *Service) replaceProblemAndTestCases(ctx context.Context, existing *models.Problem, next *models.Problem, testCases []models.TestCase) error {
+	now := time.Now()
+	next.ID = existing.ID
+	next.CreatedAt = existing.CreatedAt
+	next.UpdatedAt = now
+	next.Version = existing.Version + 1
+	if next.Version < 1 {
+		next.Version = 1
+	}
+	if next.StarterCode == nil {
+		next.StarterCode = defaultStarterCode()
+	}
+
+	if _, err := s.problems.ReplaceOne(ctx, bson.M{"problemId": existing.ProblemID}, next); err != nil {
+		return err
+	}
+	return s.replaceTestCases(ctx, next.ProblemID, testCases)
+}
+
+func (s *Service) replaceTestCases(ctx context.Context, problemID string, testCases []models.TestCase) error {
+	if _, err := s.testCases.DeleteMany(ctx, bson.M{"problemId": problemID}); err != nil {
+		return err
+	}
+	if len(testCases) == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	docs := make([]interface{}, 0, len(testCases))
+	for _, tc := range testCases {
+		tc.ID = primitive.NilObjectID
+		tc.ProblemID = problemID
+		if tc.SizeBucket == "" {
+			tc.SizeBucket = "small"
+		}
+		if tc.Weight == 0 {
+			tc.Weight = 10
+		}
+		tc.CreatedAt = now
+		docs = append(docs, tc)
+	}
+	_, err := s.testCases.InsertMany(ctx, docs)
+	return err
+}
+
+func validateProblemForImport(p *models.Problem) error {
+	if p.ProblemID == "" {
+		return errors.New("problemId is required")
+	}
+	if strings.TrimSpace(p.Title) == "" {
+		return errors.New("title is required")
+	}
+	if strings.TrimSpace(p.Statement) == "" {
+		return errors.New("statement is required")
+	}
+	if p.Category != models.CategoryDSA && p.Category != models.CategoryDB {
+		return fmt.Errorf("category must be %q or %q", models.CategoryDSA, models.CategoryDB)
+	}
+	switch p.Difficulty {
+	case "easy", "medium", "hard":
+		return nil
+	default:
+		return errors.New("difficulty must be easy, medium, or hard")
+	}
+}
+
 func (s *Service) UpdateProblem(ctx context.Context, problemID string, update bson.M) (*models.Problem, error) {
 	update["updatedAt"] = time.Now()
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
@@ -94,7 +268,7 @@ func (s *Service) UpdateProblem(ctx context.Context, problemID string, update bs
 }
 
 func (s *Service) DeleteProblem(ctx context.Context, problemID string) error {
-	
+
 	_, err := s.problems.DeleteMany(ctx, bson.M{"problemId": problemID})
 	if err != nil {
 		return err

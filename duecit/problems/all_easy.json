@@ -1,0 +1,647 @@
+[
+    {
+      "problemId": "P101",
+      "title": "Two Sum",
+      "statement": "Given an array of integers nums and an integer target, return the indices of the two numbers such that they add up to target. Assume exactly one solution exists, and you may not use the same element twice.",
+      "inputFormat": "n\\nn space-separated integers (nums)\\ntarget",
+      "outputFormat": "Two space-separated indices",
+      "constraints": "2 <= n <= 10^5",
+      "category": "dsa",
+      "difficulty": "easy",
+      "tags": [
+        "array",
+        "hash-table"
+      ],
+      "signature": {
+        "funcName": "twoSum",
+        "params": [
+          "nums",
+          "target"
+        ],
+        "returnType": "int[]"
+      },
+      "inputSpec": [
+        {
+          "name": "n",
+          "type": "int",
+          "passToFunc": false
+        },
+        {
+          "name": "nums",
+          "type": "int[]",
+          "passToFunc": true,
+          "lengthVar": "n"
+        },
+        {
+          "name": "target",
+          "type": "int",
+          "passToFunc": true
+        }
+      ],
+      "driverCode": {
+        "python": "##SOLUTION##\n\nimport sys\ndata = sys.stdin.read().strip().split()\ni = 0\nn = int(data[i]); i += 1\nnums = [int(x) for x in data[i:i+n]]; i += n\ntarget = int(data[i]); i += 1\nans = twoSum(nums, target)\nprint(*ans)\n",
+        "javascript": "##SOLUTION##\n\nconst data = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/);\nlet i = 0;\nconst n = parseInt(data[i++], 10);\nconst nums = data.slice(i, i+n).map(Number); i += n;\nconst target = parseInt(data[i++], 10);\nconst ans = twoSum(nums, target);\nconsole.log(ans.join(\" \"));\n",
+        "go": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n)\n\n##SOLUTION##\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\tvar sb strings.Builder\n\tbuf := make([]byte, 4096)\n\tfor {\n\t\tn, err := reader.Read(buf)\n\t\tif n > 0 {\n\t\t\tsb.Write(buf[:n])\n\t\t}\n\t\tif err != nil {\n\t\t\tbreak\n\t\t}\n\t}\n\ttokens := strings.Fields(sb.String())\n\ti := 0\n\tn, _ := strconv.Atoi(tokens[i]); i++\n\tnums := make([]int, n); for j := 0; j < n; j++ { nums[j], _ = strconv.Atoi(tokens[i]); i++ }\n\ttarget, _ := strconv.Atoi(tokens[i]); i++\n\tans := twoSum(nums, target)\n\tstrs := make([]string, len(ans))\n\tfor idx, v := range ans {\n\t\tstrs[idx] = fmt.Sprint(v)\n\t}\n\tfmt.Println(strings.Join(strs, \" \"))\n}\n",
+        "java": "import java.util.*;\nimport java.io.*;\n\n##SOLUTION##\n\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n        StringBuilder input = new StringBuilder();\n        String line;\n        while ((line = br.readLine()) != null) { input.append(line).append(\" \"); }\n        String[] tok = input.toString().trim().split(\"\\\\s+\");\n        int i = 0;\n        int n = Integer.parseInt(tok[i++]);\n        int[] nums = new int[n]; for (int j = 0; j < n; j++) { nums[j] = Integer.parseInt(tok[i++]); }\n        int target = Integer.parseInt(tok[i++]);\n        var ans = Solution.twoSum(nums, target);\n        StringBuilder sb2 = new StringBuilder();\n        for (int __i = 0; __i < ans.length; __i++) { if (__i > 0) sb2.append(\" \"); sb2.append(ans[__i]); }\n        System.out.println(sb2.toString());\n    }\n}\n",
+        "c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n\n##SOLUTION##\n\nint main() {\n    char buf[1000000];\n    size_t len = fread(buf, 1, sizeof(buf)-1, stdin);\n    buf[len] = 0;\n\n    char *tok[100000];\n    int ntok = 0;\n    char *__p = strtok(buf, \" \\t\\r\\n\");\n    while (__p) { tok[ntok++] = __p; __p = strtok(NULL, \" \\t\\r\\n\"); }\n\n    int i = 0;\n    int n = atoi(tok[i++]);\n    int nums[n]; for (int j=0;j<n;j++) { nums[j] = atoi(tok[i++]); }\n    int target = atoi(tok[i++]);\n    int numsSize = n;\n    int returnSize = 0;\n    int *ans = twoSum(nums, numsSize, target, &returnSize);\n    for (int __i = 0; __i < returnSize; __i++) {\n        if (__i > 0) printf(\" \");\n        printf(\"%d\", ans[__i]);\n    }\n    printf(\"\\n\");\n    return 0;\n}\n",
+        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\n\n##SOLUTION##\n\nint main() {\n    std::ios::sync_with_stdio(false);\n    stringstream ss;\n    ss << cin.rdbuf();\n    string all = ss.str();\n    vector<string> tok;\n    {\n        stringstream iss(all);\n        string w;\n        while (iss >> w) tok.push_back(w);\n    }\n    int i = 0;\n    int n = stoi(tok[i++]);\n    vector<int> nums; for (int j=0;j<n;j++) { nums.push_back(stoi(tok[i++])); }\n    int target = stoi(tok[i++]);\n    auto ans = twoSum(nums, target);\n    for (size_t __i = 0; __i < ans.size(); __i++) { if (__i) cout << \" \"; cout << ans[__i]; }\n    cout << endl;\n    return 0;\n}\n"
+      },
+      "testCases": [
+        {
+          "input": "4\n2 7 11 15\n9",
+          "expectedOutput": "0 1",
+          "sizeBucket": "small",
+          "weight": 20,
+          "isHidden": false
+        },
+        {
+          "input": "3\n3 2 4\n6",
+          "expectedOutput": "1 2",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        },
+        {
+          "input": "2\n3 3\n6",
+          "expectedOutput": "0 1",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        }
+      ]
+    },
+    {
+      "problemId": "P102",
+      "title": "Reverse String",
+      "statement": "Given a string s, return the string reversed.",
+      "inputFormat": "A single string (no spaces)",
+      "outputFormat": "The reversed string",
+      "constraints": "1 <= length <= 10^5",
+      "category": "dsa",
+      "difficulty": "easy",
+      "tags": [
+        "string",
+        "two-pointers"
+      ],
+      "signature": {
+        "funcName": "reverseString",
+        "params": [
+          "s"
+        ],
+        "returnType": "string"
+      },
+      "inputSpec": [
+        {
+          "name": "s",
+          "type": "string",
+          "passToFunc": true
+        }
+      ],
+      "driverCode": {
+        "python": "##SOLUTION##\n\nimport sys\ndata = sys.stdin.read().strip().split()\ni = 0\ns = data[i]; i += 1\nans = reverseString(s)\nprint(ans)\n",
+        "javascript": "##SOLUTION##\n\nconst data = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/);\nlet i = 0;\nconst s = data[i++];\nconst ans = reverseString(s);\nconsole.log(ans);\n",
+        "go": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strings\"\n)\n\n##SOLUTION##\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\tvar sb strings.Builder\n\tbuf := make([]byte, 4096)\n\tfor {\n\t\tn, err := reader.Read(buf)\n\t\tif n > 0 {\n\t\t\tsb.Write(buf[:n])\n\t\t}\n\t\tif err != nil {\n\t\t\tbreak\n\t\t}\n\t}\n\ttokens := strings.Fields(sb.String())\n\ti := 0\n\ts := tokens[i]; i++\n\tans := reverseString(s)\n\tfmt.Println(ans)\n}\n",
+        "java": "import java.util.*;\nimport java.io.*;\n\n##SOLUTION##\n\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n        StringBuilder input = new StringBuilder();\n        String line;\n        while ((line = br.readLine()) != null) { input.append(line).append(\" \"); }\n        String[] tok = input.toString().trim().split(\"\\\\s+\");\n        int i = 0;\n        String s = tok[i++];\n        var ans = Solution.reverseString(s);\n        System.out.println(ans);\n    }\n}\n",
+        "c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n\n##SOLUTION##\n\nint main() {\n    char buf[1000000];\n    size_t len = fread(buf, 1, sizeof(buf)-1, stdin);\n    buf[len] = 0;\n\n    char *tok[100000];\n    int ntok = 0;\n    char *__p = strtok(buf, \" \\t\\r\\n\");\n    while (__p) { tok[ntok++] = __p; __p = strtok(NULL, \" \\t\\r\\n\"); }\n\n    int i = 0;\n    char *s = tok[i++];\n    \n    char *ans = reverseString(s);\n    printf(\"%s\\n\", ans);\n    return 0;\n}\n",
+        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\n\n##SOLUTION##\n\nint main() {\n    std::ios::sync_with_stdio(false);\n    stringstream ss;\n    ss << cin.rdbuf();\n    string all = ss.str();\n    vector<string> tok;\n    {\n        stringstream iss(all);\n        string w;\n        while (iss >> w) tok.push_back(w);\n    }\n    int i = 0;\n    string s = tok[i++];\n    auto ans = reverseString(s);\n    cout << ans << endl;\n    return 0;\n}\n"
+      },
+      "testCases": [
+        {
+          "input": "hello",
+          "expectedOutput": "olleh",
+          "sizeBucket": "small",
+          "weight": 20,
+          "isHidden": false
+        },
+        {
+          "input": "world",
+          "expectedOutput": "dlrow",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        },
+        {
+          "input": "a",
+          "expectedOutput": "a",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        }
+      ]
+    },
+    {
+      "problemId": "P103",
+      "title": "Valid Palindrome",
+      "statement": "Given a string s containing only lowercase letters (no spaces or punctuation), return true if it reads the same forwards and backwards, false otherwise.",
+      "inputFormat": "A single string (no spaces)",
+      "outputFormat": "true or false",
+      "constraints": "1 <= length <= 10^5",
+      "category": "dsa",
+      "difficulty": "easy",
+      "tags": [
+        "string",
+        "two-pointers"
+      ],
+      "signature": {
+        "funcName": "isPalindrome",
+        "params": [
+          "s"
+        ],
+        "returnType": "bool"
+      },
+      "inputSpec": [
+        {
+          "name": "s",
+          "type": "string",
+          "passToFunc": true
+        }
+      ],
+      "driverCode": {
+        "python": "##SOLUTION##\n\nimport sys\ndata = sys.stdin.read().strip().split()\ni = 0\ns = data[i]; i += 1\nans = isPalindrome(s)\nprint(\"true\" if ans else \"false\")\n",
+        "javascript": "##SOLUTION##\n\nconst data = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/);\nlet i = 0;\nconst s = data[i++];\nconst ans = isPalindrome(s);\nconsole.log(ans ? \"true\" : \"false\");\n",
+        "go": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strings\"\n)\n\n##SOLUTION##\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\tvar sb strings.Builder\n\tbuf := make([]byte, 4096)\n\tfor {\n\t\tn, err := reader.Read(buf)\n\t\tif n > 0 {\n\t\t\tsb.Write(buf[:n])\n\t\t}\n\t\tif err != nil {\n\t\t\tbreak\n\t\t}\n\t}\n\ttokens := strings.Fields(sb.String())\n\ti := 0\n\ts := tokens[i]; i++\n\tans := isPalindrome(s)\n\tif ans { fmt.Println(\"true\") } else { fmt.Println(\"false\") }\n}\n",
+        "java": "import java.util.*;\nimport java.io.*;\n\n##SOLUTION##\n\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n        StringBuilder input = new StringBuilder();\n        String line;\n        while ((line = br.readLine()) != null) { input.append(line).append(\" \"); }\n        String[] tok = input.toString().trim().split(\"\\\\s+\");\n        int i = 0;\n        String s = tok[i++];\n        var ans = Solution.isPalindrome(s);\n        System.out.println(ans ? \"true\" : \"false\");\n    }\n}\n",
+        "c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n\n##SOLUTION##\n\nint main() {\n    char buf[1000000];\n    size_t len = fread(buf, 1, sizeof(buf)-1, stdin);\n    buf[len] = 0;\n\n    char *tok[100000];\n    int ntok = 0;\n    char *__p = strtok(buf, \" \\t\\r\\n\");\n    while (__p) { tok[ntok++] = __p; __p = strtok(NULL, \" \\t\\r\\n\"); }\n\n    int i = 0;\n    char *s = tok[i++];\n    \n    bool ans = isPalindrome(s);\n    printf(ans ? \"true\\n\" : \"false\\n\");\n    return 0;\n}\n",
+        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\n\n##SOLUTION##\n\nint main() {\n    std::ios::sync_with_stdio(false);\n    stringstream ss;\n    ss << cin.rdbuf();\n    string all = ss.str();\n    vector<string> tok;\n    {\n        stringstream iss(all);\n        string w;\n        while (iss >> w) tok.push_back(w);\n    }\n    int i = 0;\n    string s = tok[i++];\n    auto ans = isPalindrome(s);\n    cout << (ans ? \"true\" : \"false\") << endl;\n    return 0;\n}\n"
+      },
+      "testCases": [
+        {
+          "input": "racecar",
+          "expectedOutput": "true",
+          "sizeBucket": "small",
+          "weight": 20,
+          "isHidden": false
+        },
+        {
+          "input": "hello",
+          "expectedOutput": "false",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        },
+        {
+          "input": "a",
+          "expectedOutput": "true",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        }
+      ]
+    },
+    {
+      "problemId": "P104",
+      "title": "Maximum Subarray",
+      "statement": "Given an integer array nums, find the contiguous subarray (containing at least one number) which has the largest sum, and return that sum.",
+      "inputFormat": "n\\nn space-separated integers",
+      "outputFormat": "Single integer (max sum)",
+      "constraints": "1 <= n <= 10^5",
+      "category": "dsa",
+      "difficulty": "easy",
+      "tags": [
+        "array",
+        "dynamic-programming"
+      ],
+      "signature": {
+        "funcName": "maxSubArray",
+        "params": [
+          "nums"
+        ],
+        "returnType": "int"
+      },
+      "inputSpec": [
+        {
+          "name": "n",
+          "type": "int",
+          "passToFunc": false
+        },
+        {
+          "name": "nums",
+          "type": "int[]",
+          "passToFunc": true,
+          "lengthVar": "n"
+        }
+      ],
+      "driverCode": {
+        "python": "##SOLUTION##\n\nimport sys\ndata = sys.stdin.read().strip().split()\ni = 0\nn = int(data[i]); i += 1\nnums = [int(x) for x in data[i:i+n]]; i += n\nans = maxSubArray(nums)\nprint(ans)\n",
+        "javascript": "##SOLUTION##\n\nconst data = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/);\nlet i = 0;\nconst n = parseInt(data[i++], 10);\nconst nums = data.slice(i, i+n).map(Number); i += n;\nconst ans = maxSubArray(nums);\nconsole.log(ans);\n",
+        "go": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n)\n\n##SOLUTION##\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\tvar sb strings.Builder\n\tbuf := make([]byte, 4096)\n\tfor {\n\t\tn, err := reader.Read(buf)\n\t\tif n > 0 {\n\t\t\tsb.Write(buf[:n])\n\t\t}\n\t\tif err != nil {\n\t\t\tbreak\n\t\t}\n\t}\n\ttokens := strings.Fields(sb.String())\n\ti := 0\n\tn, _ := strconv.Atoi(tokens[i]); i++\n\tnums := make([]int, n); for j := 0; j < n; j++ { nums[j], _ = strconv.Atoi(tokens[i]); i++ }\n\tans := maxSubArray(nums)\n\tfmt.Println(ans)\n}\n",
+        "java": "import java.util.*;\nimport java.io.*;\n\n##SOLUTION##\n\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n        StringBuilder input = new StringBuilder();\n        String line;\n        while ((line = br.readLine()) != null) { input.append(line).append(\" \"); }\n        String[] tok = input.toString().trim().split(\"\\\\s+\");\n        int i = 0;\n        int n = Integer.parseInt(tok[i++]);\n        int[] nums = new int[n]; for (int j = 0; j < n; j++) { nums[j] = Integer.parseInt(tok[i++]); }\n        var ans = Solution.maxSubArray(nums);\n        System.out.println(ans);\n    }\n}\n",
+        "c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n\n##SOLUTION##\n\nint main() {\n    char buf[1000000];\n    size_t len = fread(buf, 1, sizeof(buf)-1, stdin);\n    buf[len] = 0;\n\n    char *tok[100000];\n    int ntok = 0;\n    char *__p = strtok(buf, \" \\t\\r\\n\");\n    while (__p) { tok[ntok++] = __p; __p = strtok(NULL, \" \\t\\r\\n\"); }\n\n    int i = 0;\n    int n = atoi(tok[i++]);\n    int nums[n]; for (int j=0;j<n;j++) { nums[j] = atoi(tok[i++]); }\n    int numsSize = n;\n    int ans = maxSubArray(nums, numsSize);\n    printf(\"%d\\n\", ans);\n    return 0;\n}\n",
+        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\n\n##SOLUTION##\n\nint main() {\n    std::ios::sync_with_stdio(false);\n    stringstream ss;\n    ss << cin.rdbuf();\n    string all = ss.str();\n    vector<string> tok;\n    {\n        stringstream iss(all);\n        string w;\n        while (iss >> w) tok.push_back(w);\n    }\n    int i = 0;\n    int n = stoi(tok[i++]);\n    vector<int> nums; for (int j=0;j<n;j++) { nums.push_back(stoi(tok[i++])); }\n    auto ans = maxSubArray(nums);\n    cout << ans << endl;\n    return 0;\n}\n"
+      },
+      "testCases": [
+        {
+          "input": "9\n-2 1 -3 4 -1 2 1 -5 4",
+          "expectedOutput": "6",
+          "sizeBucket": "small",
+          "weight": 20,
+          "isHidden": false
+        },
+        {
+          "input": "1\n1",
+          "expectedOutput": "1",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        },
+        {
+          "input": "5\n-1 -2 -3 -4 -5",
+          "expectedOutput": "-1",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        }
+      ]
+    },
+    {
+      "problemId": "P105",
+      "title": "Contains Duplicate",
+      "statement": "Given an integer array nums, return true if any value appears at least twice, false if every element is distinct.",
+      "inputFormat": "n\\nn space-separated integers",
+      "outputFormat": "true or false",
+      "constraints": "1 <= n <= 10^5",
+      "category": "dsa",
+      "difficulty": "easy",
+      "tags": [
+        "array",
+        "hash-table"
+      ],
+      "signature": {
+        "funcName": "containsDuplicate",
+        "params": [
+          "nums"
+        ],
+        "returnType": "bool"
+      },
+      "inputSpec": [
+        {
+          "name": "n",
+          "type": "int",
+          "passToFunc": false
+        },
+        {
+          "name": "nums",
+          "type": "int[]",
+          "passToFunc": true,
+          "lengthVar": "n"
+        }
+      ],
+      "driverCode": {
+        "python": "##SOLUTION##\n\nimport sys\ndata = sys.stdin.read().strip().split()\ni = 0\nn = int(data[i]); i += 1\nnums = [int(x) for x in data[i:i+n]]; i += n\nans = containsDuplicate(nums)\nprint(\"true\" if ans else \"false\")\n",
+        "javascript": "##SOLUTION##\n\nconst data = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/);\nlet i = 0;\nconst n = parseInt(data[i++], 10);\nconst nums = data.slice(i, i+n).map(Number); i += n;\nconst ans = containsDuplicate(nums);\nconsole.log(ans ? \"true\" : \"false\");\n",
+        "go": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n)\n\n##SOLUTION##\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\tvar sb strings.Builder\n\tbuf := make([]byte, 4096)\n\tfor {\n\t\tn, err := reader.Read(buf)\n\t\tif n > 0 {\n\t\t\tsb.Write(buf[:n])\n\t\t}\n\t\tif err != nil {\n\t\t\tbreak\n\t\t}\n\t}\n\ttokens := strings.Fields(sb.String())\n\ti := 0\n\tn, _ := strconv.Atoi(tokens[i]); i++\n\tnums := make([]int, n); for j := 0; j < n; j++ { nums[j], _ = strconv.Atoi(tokens[i]); i++ }\n\tans := containsDuplicate(nums)\n\tif ans { fmt.Println(\"true\") } else { fmt.Println(\"false\") }\n}\n",
+        "java": "import java.util.*;\nimport java.io.*;\n\n##SOLUTION##\n\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n        StringBuilder input = new StringBuilder();\n        String line;\n        while ((line = br.readLine()) != null) { input.append(line).append(\" \"); }\n        String[] tok = input.toString().trim().split(\"\\\\s+\");\n        int i = 0;\n        int n = Integer.parseInt(tok[i++]);\n        int[] nums = new int[n]; for (int j = 0; j < n; j++) { nums[j] = Integer.parseInt(tok[i++]); }\n        var ans = Solution.containsDuplicate(nums);\n        System.out.println(ans ? \"true\" : \"false\");\n    }\n}\n",
+        "c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n\n##SOLUTION##\n\nint main() {\n    char buf[1000000];\n    size_t len = fread(buf, 1, sizeof(buf)-1, stdin);\n    buf[len] = 0;\n\n    char *tok[100000];\n    int ntok = 0;\n    char *__p = strtok(buf, \" \\t\\r\\n\");\n    while (__p) { tok[ntok++] = __p; __p = strtok(NULL, \" \\t\\r\\n\"); }\n\n    int i = 0;\n    int n = atoi(tok[i++]);\n    int nums[n]; for (int j=0;j<n;j++) { nums[j] = atoi(tok[i++]); }\n    int numsSize = n;\n    bool ans = containsDuplicate(nums, numsSize);\n    printf(ans ? \"true\\n\" : \"false\\n\");\n    return 0;\n}\n",
+        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\n\n##SOLUTION##\n\nint main() {\n    std::ios::sync_with_stdio(false);\n    stringstream ss;\n    ss << cin.rdbuf();\n    string all = ss.str();\n    vector<string> tok;\n    {\n        stringstream iss(all);\n        string w;\n        while (iss >> w) tok.push_back(w);\n    }\n    int i = 0;\n    int n = stoi(tok[i++]);\n    vector<int> nums; for (int j=0;j<n;j++) { nums.push_back(stoi(tok[i++])); }\n    auto ans = containsDuplicate(nums);\n    cout << (ans ? \"true\" : \"false\") << endl;\n    return 0;\n}\n"
+      },
+      "testCases": [
+        {
+          "input": "4\n1 2 3 1",
+          "expectedOutput": "true",
+          "sizeBucket": "small",
+          "weight": 20,
+          "isHidden": false
+        },
+        {
+          "input": "4\n1 2 3 4",
+          "expectedOutput": "false",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        },
+        {
+          "input": "1\n7",
+          "expectedOutput": "false",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        }
+      ]
+    },
+    {
+      "problemId": "P106",
+      "title": "Single Number",
+      "statement": "Given a non-empty array of integers where every element appears twice except for one, find that single one.",
+      "inputFormat": "n\\nn space-separated integers",
+      "outputFormat": "Single integer",
+      "constraints": "1 <= n <= 3*10^4, n is odd",
+      "category": "dsa",
+      "difficulty": "easy",
+      "tags": [
+        "array",
+        "bit-manipulation"
+      ],
+      "signature": {
+        "funcName": "singleNumber",
+        "params": [
+          "nums"
+        ],
+        "returnType": "int"
+      },
+      "inputSpec": [
+        {
+          "name": "n",
+          "type": "int",
+          "passToFunc": false
+        },
+        {
+          "name": "nums",
+          "type": "int[]",
+          "passToFunc": true,
+          "lengthVar": "n"
+        }
+      ],
+      "driverCode": {
+        "python": "##SOLUTION##\n\nimport sys\ndata = sys.stdin.read().strip().split()\ni = 0\nn = int(data[i]); i += 1\nnums = [int(x) for x in data[i:i+n]]; i += n\nans = singleNumber(nums)\nprint(ans)\n",
+        "javascript": "##SOLUTION##\n\nconst data = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/);\nlet i = 0;\nconst n = parseInt(data[i++], 10);\nconst nums = data.slice(i, i+n).map(Number); i += n;\nconst ans = singleNumber(nums);\nconsole.log(ans);\n",
+        "go": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n)\n\n##SOLUTION##\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\tvar sb strings.Builder\n\tbuf := make([]byte, 4096)\n\tfor {\n\t\tn, err := reader.Read(buf)\n\t\tif n > 0 {\n\t\t\tsb.Write(buf[:n])\n\t\t}\n\t\tif err != nil {\n\t\t\tbreak\n\t\t}\n\t}\n\ttokens := strings.Fields(sb.String())\n\ti := 0\n\tn, _ := strconv.Atoi(tokens[i]); i++\n\tnums := make([]int, n); for j := 0; j < n; j++ { nums[j], _ = strconv.Atoi(tokens[i]); i++ }\n\tans := singleNumber(nums)\n\tfmt.Println(ans)\n}\n",
+        "java": "import java.util.*;\nimport java.io.*;\n\n##SOLUTION##\n\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n        StringBuilder input = new StringBuilder();\n        String line;\n        while ((line = br.readLine()) != null) { input.append(line).append(\" \"); }\n        String[] tok = input.toString().trim().split(\"\\\\s+\");\n        int i = 0;\n        int n = Integer.parseInt(tok[i++]);\n        int[] nums = new int[n]; for (int j = 0; j < n; j++) { nums[j] = Integer.parseInt(tok[i++]); }\n        var ans = Solution.singleNumber(nums);\n        System.out.println(ans);\n    }\n}\n",
+        "c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n\n##SOLUTION##\n\nint main() {\n    char buf[1000000];\n    size_t len = fread(buf, 1, sizeof(buf)-1, stdin);\n    buf[len] = 0;\n\n    char *tok[100000];\n    int ntok = 0;\n    char *__p = strtok(buf, \" \\t\\r\\n\");\n    while (__p) { tok[ntok++] = __p; __p = strtok(NULL, \" \\t\\r\\n\"); }\n\n    int i = 0;\n    int n = atoi(tok[i++]);\n    int nums[n]; for (int j=0;j<n;j++) { nums[j] = atoi(tok[i++]); }\n    int numsSize = n;\n    int ans = singleNumber(nums, numsSize);\n    printf(\"%d\\n\", ans);\n    return 0;\n}\n",
+        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\n\n##SOLUTION##\n\nint main() {\n    std::ios::sync_with_stdio(false);\n    stringstream ss;\n    ss << cin.rdbuf();\n    string all = ss.str();\n    vector<string> tok;\n    {\n        stringstream iss(all);\n        string w;\n        while (iss >> w) tok.push_back(w);\n    }\n    int i = 0;\n    int n = stoi(tok[i++]);\n    vector<int> nums; for (int j=0;j<n;j++) { nums.push_back(stoi(tok[i++])); }\n    auto ans = singleNumber(nums);\n    cout << ans << endl;\n    return 0;\n}\n"
+      },
+      "testCases": [
+        {
+          "input": "3\n2 2 1",
+          "expectedOutput": "1",
+          "sizeBucket": "small",
+          "weight": 20,
+          "isHidden": false
+        },
+        {
+          "input": "5\n4 1 2 1 2",
+          "expectedOutput": "4",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        },
+        {
+          "input": "1\n99",
+          "expectedOutput": "99",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        }
+      ]
+    },
+    {
+      "problemId": "P107",
+      "title": "Move Zeroes",
+      "statement": "Given an integer array nums, move all zeroes to the end while maintaining the relative order of the non-zero elements. Return the resulting array.",
+      "inputFormat": "n\\nn space-separated integers",
+      "outputFormat": "n space-separated integers (nums with zeroes moved to the end)",
+      "constraints": "1 <= n <= 10^4",
+      "category": "dsa",
+      "difficulty": "easy",
+      "tags": [
+        "array",
+        "two-pointers"
+      ],
+      "signature": {
+        "funcName": "moveZeroes",
+        "params": [
+          "nums"
+        ],
+        "returnType": "int[]"
+      },
+      "inputSpec": [
+        {
+          "name": "n",
+          "type": "int",
+          "passToFunc": false
+        },
+        {
+          "name": "nums",
+          "type": "int[]",
+          "passToFunc": true,
+          "lengthVar": "n"
+        }
+      ],
+      "driverCode": {
+        "python": "##SOLUTION##\n\nimport sys\ndata = sys.stdin.read().strip().split()\ni = 0\nn = int(data[i]); i += 1\nnums = [int(x) for x in data[i:i+n]]; i += n\nans = moveZeroes(nums)\nprint(*ans)\n",
+        "javascript": "##SOLUTION##\n\nconst data = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/);\nlet i = 0;\nconst n = parseInt(data[i++], 10);\nconst nums = data.slice(i, i+n).map(Number); i += n;\nconst ans = moveZeroes(nums);\nconsole.log(ans.join(\" \"));\n",
+        "go": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n)\n\n##SOLUTION##\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\tvar sb strings.Builder\n\tbuf := make([]byte, 4096)\n\tfor {\n\t\tn, err := reader.Read(buf)\n\t\tif n > 0 {\n\t\t\tsb.Write(buf[:n])\n\t\t}\n\t\tif err != nil {\n\t\t\tbreak\n\t\t}\n\t}\n\ttokens := strings.Fields(sb.String())\n\ti := 0\n\tn, _ := strconv.Atoi(tokens[i]); i++\n\tnums := make([]int, n); for j := 0; j < n; j++ { nums[j], _ = strconv.Atoi(tokens[i]); i++ }\n\tans := moveZeroes(nums)\n\tstrs := make([]string, len(ans))\n\tfor idx, v := range ans {\n\t\tstrs[idx] = fmt.Sprint(v)\n\t}\n\tfmt.Println(strings.Join(strs, \" \"))\n}\n",
+        "java": "import java.util.*;\nimport java.io.*;\n\n##SOLUTION##\n\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n        StringBuilder input = new StringBuilder();\n        String line;\n        while ((line = br.readLine()) != null) { input.append(line).append(\" \"); }\n        String[] tok = input.toString().trim().split(\"\\\\s+\");\n        int i = 0;\n        int n = Integer.parseInt(tok[i++]);\n        int[] nums = new int[n]; for (int j = 0; j < n; j++) { nums[j] = Integer.parseInt(tok[i++]); }\n        var ans = Solution.moveZeroes(nums);\n        StringBuilder sb2 = new StringBuilder();\n        for (int __i = 0; __i < ans.length; __i++) { if (__i > 0) sb2.append(\" \"); sb2.append(ans[__i]); }\n        System.out.println(sb2.toString());\n    }\n}\n",
+        "c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n\n##SOLUTION##\n\nint main() {\n    char buf[1000000];\n    size_t len = fread(buf, 1, sizeof(buf)-1, stdin);\n    buf[len] = 0;\n\n    char *tok[100000];\n    int ntok = 0;\n    char *__p = strtok(buf, \" \\t\\r\\n\");\n    while (__p) { tok[ntok++] = __p; __p = strtok(NULL, \" \\t\\r\\n\"); }\n\n    int i = 0;\n    int n = atoi(tok[i++]);\n    int nums[n]; for (int j=0;j<n;j++) { nums[j] = atoi(tok[i++]); }\n    int numsSize = n;\n    int returnSize = 0;\n    int *ans = moveZeroes(nums, numsSize, &returnSize);\n    for (int __i = 0; __i < returnSize; __i++) {\n        if (__i > 0) printf(\" \");\n        printf(\"%d\", ans[__i]);\n    }\n    printf(\"\\n\");\n    return 0;\n}\n",
+        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\n\n##SOLUTION##\n\nint main() {\n    std::ios::sync_with_stdio(false);\n    stringstream ss;\n    ss << cin.rdbuf();\n    string all = ss.str();\n    vector<string> tok;\n    {\n        stringstream iss(all);\n        string w;\n        while (iss >> w) tok.push_back(w);\n    }\n    int i = 0;\n    int n = stoi(tok[i++]);\n    vector<int> nums; for (int j=0;j<n;j++) { nums.push_back(stoi(tok[i++])); }\n    auto ans = moveZeroes(nums);\n    for (size_t __i = 0; __i < ans.size(); __i++) { if (__i) cout << \" \"; cout << ans[__i]; }\n    cout << endl;\n    return 0;\n}\n"
+      },
+      "testCases": [
+        {
+          "input": "5\n0 1 0 3 12",
+          "expectedOutput": "1 3 12 0 0",
+          "sizeBucket": "small",
+          "weight": 20,
+          "isHidden": false
+        },
+        {
+          "input": "1\n0",
+          "expectedOutput": "0",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        },
+        {
+          "input": "3\n1 2 3",
+          "expectedOutput": "1 2 3",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        }
+      ]
+    },
+    {
+      "problemId": "P108",
+      "title": "Missing Number",
+      "statement": "Given an array nums containing n distinct numbers in the range [0, n], return the one number in that range that is missing from the array.",
+      "inputFormat": "n\\nn space-separated integers",
+      "outputFormat": "Single integer",
+      "constraints": "1 <= n <= 10^4",
+      "category": "dsa",
+      "difficulty": "easy",
+      "tags": [
+        "array",
+        "math",
+        "bit-manipulation"
+      ],
+      "signature": {
+        "funcName": "missingNumber",
+        "params": [
+          "nums"
+        ],
+        "returnType": "int"
+      },
+      "inputSpec": [
+        {
+          "name": "n",
+          "type": "int",
+          "passToFunc": false
+        },
+        {
+          "name": "nums",
+          "type": "int[]",
+          "passToFunc": true,
+          "lengthVar": "n"
+        }
+      ],
+      "driverCode": {
+        "python": "##SOLUTION##\n\nimport sys\ndata = sys.stdin.read().strip().split()\ni = 0\nn = int(data[i]); i += 1\nnums = [int(x) for x in data[i:i+n]]; i += n\nans = missingNumber(nums)\nprint(ans)\n",
+        "javascript": "##SOLUTION##\n\nconst data = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/);\nlet i = 0;\nconst n = parseInt(data[i++], 10);\nconst nums = data.slice(i, i+n).map(Number); i += n;\nconst ans = missingNumber(nums);\nconsole.log(ans);\n",
+        "go": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n)\n\n##SOLUTION##\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\tvar sb strings.Builder\n\tbuf := make([]byte, 4096)\n\tfor {\n\t\tn, err := reader.Read(buf)\n\t\tif n > 0 {\n\t\t\tsb.Write(buf[:n])\n\t\t}\n\t\tif err != nil {\n\t\t\tbreak\n\t\t}\n\t}\n\ttokens := strings.Fields(sb.String())\n\ti := 0\n\tn, _ := strconv.Atoi(tokens[i]); i++\n\tnums := make([]int, n); for j := 0; j < n; j++ { nums[j], _ = strconv.Atoi(tokens[i]); i++ }\n\tans := missingNumber(nums)\n\tfmt.Println(ans)\n}\n",
+        "java": "import java.util.*;\nimport java.io.*;\n\n##SOLUTION##\n\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n        StringBuilder input = new StringBuilder();\n        String line;\n        while ((line = br.readLine()) != null) { input.append(line).append(\" \"); }\n        String[] tok = input.toString().trim().split(\"\\\\s+\");\n        int i = 0;\n        int n = Integer.parseInt(tok[i++]);\n        int[] nums = new int[n]; for (int j = 0; j < n; j++) { nums[j] = Integer.parseInt(tok[i++]); }\n        var ans = Solution.missingNumber(nums);\n        System.out.println(ans);\n    }\n}\n",
+        "c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n\n##SOLUTION##\n\nint main() {\n    char buf[1000000];\n    size_t len = fread(buf, 1, sizeof(buf)-1, stdin);\n    buf[len] = 0;\n\n    char *tok[100000];\n    int ntok = 0;\n    char *__p = strtok(buf, \" \\t\\r\\n\");\n    while (__p) { tok[ntok++] = __p; __p = strtok(NULL, \" \\t\\r\\n\"); }\n\n    int i = 0;\n    int n = atoi(tok[i++]);\n    int nums[n]; for (int j=0;j<n;j++) { nums[j] = atoi(tok[i++]); }\n    int numsSize = n;\n    int ans = missingNumber(nums, numsSize);\n    printf(\"%d\\n\", ans);\n    return 0;\n}\n",
+        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\n\n##SOLUTION##\n\nint main() {\n    std::ios::sync_with_stdio(false);\n    stringstream ss;\n    ss << cin.rdbuf();\n    string all = ss.str();\n    vector<string> tok;\n    {\n        stringstream iss(all);\n        string w;\n        while (iss >> w) tok.push_back(w);\n    }\n    int i = 0;\n    int n = stoi(tok[i++]);\n    vector<int> nums; for (int j=0;j<n;j++) { nums.push_back(stoi(tok[i++])); }\n    auto ans = missingNumber(nums);\n    cout << ans << endl;\n    return 0;\n}\n"
+      },
+      "testCases": [
+        {
+          "input": "3\n3 0 1",
+          "expectedOutput": "2",
+          "sizeBucket": "small",
+          "weight": 20,
+          "isHidden": false
+        },
+        {
+          "input": "1\n1",
+          "expectedOutput": "0",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        },
+        {
+          "input": "5\n0 1 2 3 4",
+          "expectedOutput": "5",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        }
+      ]
+    },
+    {
+      "problemId": "P109",
+      "title": "Valid Anagram",
+      "statement": "Given two strings s and t (lowercase letters only, no spaces), return true if t is an anagram of s, false otherwise.",
+      "inputFormat": "s\\nt",
+      "outputFormat": "true or false",
+      "constraints": "1 <= length <= 5*10^4",
+      "category": "dsa",
+      "difficulty": "easy",
+      "tags": [
+        "string",
+        "hash-table"
+      ],
+      "signature": {
+        "funcName": "isAnagram",
+        "params": [
+          "s",
+          "t"
+        ],
+        "returnType": "bool"
+      },
+      "inputSpec": [
+        {
+          "name": "s",
+          "type": "string",
+          "passToFunc": true
+        },
+        {
+          "name": "t",
+          "type": "string",
+          "passToFunc": true
+        }
+      ],
+      "driverCode": {
+        "python": "##SOLUTION##\n\nimport sys\ndata = sys.stdin.read().strip().split()\ni = 0\ns = data[i]; i += 1\nt = data[i]; i += 1\nans = isAnagram(s, t)\nprint(\"true\" if ans else \"false\")\n",
+        "javascript": "##SOLUTION##\n\nconst data = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/);\nlet i = 0;\nconst s = data[i++];\nconst t = data[i++];\nconst ans = isAnagram(s, t);\nconsole.log(ans ? \"true\" : \"false\");\n",
+        "go": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strings\"\n)\n\n##SOLUTION##\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\tvar sb strings.Builder\n\tbuf := make([]byte, 4096)\n\tfor {\n\t\tn, err := reader.Read(buf)\n\t\tif n > 0 {\n\t\t\tsb.Write(buf[:n])\n\t\t}\n\t\tif err != nil {\n\t\t\tbreak\n\t\t}\n\t}\n\ttokens := strings.Fields(sb.String())\n\ti := 0\n\ts := tokens[i]; i++\n\tt := tokens[i]; i++\n\tans := isAnagram(s, t)\n\tif ans { fmt.Println(\"true\") } else { fmt.Println(\"false\") }\n}\n",
+        "java": "import java.util.*;\nimport java.io.*;\n\n##SOLUTION##\n\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n        StringBuilder input = new StringBuilder();\n        String line;\n        while ((line = br.readLine()) != null) { input.append(line).append(\" \"); }\n        String[] tok = input.toString().trim().split(\"\\\\s+\");\n        int i = 0;\n        String s = tok[i++];\n        String t = tok[i++];\n        var ans = Solution.isAnagram(s, t);\n        System.out.println(ans ? \"true\" : \"false\");\n    }\n}\n",
+        "c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n\n##SOLUTION##\n\nint main() {\n    char buf[1000000];\n    size_t len = fread(buf, 1, sizeof(buf)-1, stdin);\n    buf[len] = 0;\n\n    char *tok[100000];\n    int ntok = 0;\n    char *__p = strtok(buf, \" \\t\\r\\n\");\n    while (__p) { tok[ntok++] = __p; __p = strtok(NULL, \" \\t\\r\\n\"); }\n\n    int i = 0;\n    char *s = tok[i++];\n    char *t = tok[i++];\n    \n    bool ans = isAnagram(s, t);\n    printf(ans ? \"true\\n\" : \"false\\n\");\n    return 0;\n}\n",
+        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\n\n##SOLUTION##\n\nint main() {\n    std::ios::sync_with_stdio(false);\n    stringstream ss;\n    ss << cin.rdbuf();\n    string all = ss.str();\n    vector<string> tok;\n    {\n        stringstream iss(all);\n        string w;\n        while (iss >> w) tok.push_back(w);\n    }\n    int i = 0;\n    string s = tok[i++];\n    string t = tok[i++];\n    auto ans = isAnagram(s, t);\n    cout << (ans ? \"true\" : \"false\") << endl;\n    return 0;\n}\n"
+      },
+      "testCases": [
+        {
+          "input": "anagram\nnagaram",
+          "expectedOutput": "true",
+          "sizeBucket": "small",
+          "weight": 20,
+          "isHidden": false
+        },
+        {
+          "input": "rat\ncar",
+          "expectedOutput": "false",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        },
+        {
+          "input": "a\na",
+          "expectedOutput": "true",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        }
+      ]
+    },
+    {
+      "problemId": "P110",
+      "title": "Best Time to Buy and Sell Stock",
+      "statement": "Given an array prices where prices[i] is the price of a stock on day i, return the maximum profit from buying on one day and selling on a later day. Return 0 if no profit is possible.",
+      "inputFormat": "n\\nn space-separated integers (prices)",
+      "outputFormat": "Single integer (max profit)",
+      "constraints": "1 <= n <= 10^5",
+      "category": "dsa",
+      "difficulty": "easy",
+      "tags": [
+        "array",
+        "dynamic-programming"
+      ],
+      "signature": {
+        "funcName": "maxProfit",
+        "params": [
+          "prices"
+        ],
+        "returnType": "int"
+      },
+      "inputSpec": [
+        {
+          "name": "n",
+          "type": "int",
+          "passToFunc": false
+        },
+        {
+          "name": "prices",
+          "type": "int[]",
+          "passToFunc": true,
+          "lengthVar": "n"
+        }
+      ],
+      "driverCode": {
+        "python": "##SOLUTION##\n\nimport sys\ndata = sys.stdin.read().strip().split()\ni = 0\nn = int(data[i]); i += 1\nprices = [int(x) for x in data[i:i+n]]; i += n\nans = maxProfit(prices)\nprint(ans)\n",
+        "javascript": "##SOLUTION##\n\nconst data = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/);\nlet i = 0;\nconst n = parseInt(data[i++], 10);\nconst prices = data.slice(i, i+n).map(Number); i += n;\nconst ans = maxProfit(prices);\nconsole.log(ans);\n",
+        "go": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n)\n\n##SOLUTION##\n\nfunc main() {\n\treader := bufio.NewReader(os.Stdin)\n\tvar sb strings.Builder\n\tbuf := make([]byte, 4096)\n\tfor {\n\t\tn, err := reader.Read(buf)\n\t\tif n > 0 {\n\t\t\tsb.Write(buf[:n])\n\t\t}\n\t\tif err != nil {\n\t\t\tbreak\n\t\t}\n\t}\n\ttokens := strings.Fields(sb.String())\n\ti := 0\n\tn, _ := strconv.Atoi(tokens[i]); i++\n\tprices := make([]int, n); for j := 0; j < n; j++ { prices[j], _ = strconv.Atoi(tokens[i]); i++ }\n\tans := maxProfit(prices)\n\tfmt.Println(ans)\n}\n",
+        "java": "import java.util.*;\nimport java.io.*;\n\n##SOLUTION##\n\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n        StringBuilder input = new StringBuilder();\n        String line;\n        while ((line = br.readLine()) != null) { input.append(line).append(\" \"); }\n        String[] tok = input.toString().trim().split(\"\\\\s+\");\n        int i = 0;\n        int n = Integer.parseInt(tok[i++]);\n        int[] prices = new int[n]; for (int j = 0; j < n; j++) { prices[j] = Integer.parseInt(tok[i++]); }\n        var ans = Solution.maxProfit(prices);\n        System.out.println(ans);\n    }\n}\n",
+        "c": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdbool.h>\n\n##SOLUTION##\n\nint main() {\n    char buf[1000000];\n    size_t len = fread(buf, 1, sizeof(buf)-1, stdin);\n    buf[len] = 0;\n\n    char *tok[100000];\n    int ntok = 0;\n    char *__p = strtok(buf, \" \\t\\r\\n\");\n    while (__p) { tok[ntok++] = __p; __p = strtok(NULL, \" \\t\\r\\n\"); }\n\n    int i = 0;\n    int n = atoi(tok[i++]);\n    int prices[n]; for (int j=0;j<n;j++) { prices[j] = atoi(tok[i++]); }\n    int pricesSize = n;\n    int ans = maxProfit(prices, pricesSize);\n    printf(\"%d\\n\", ans);\n    return 0;\n}\n",
+        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\n\n##SOLUTION##\n\nint main() {\n    std::ios::sync_with_stdio(false);\n    stringstream ss;\n    ss << cin.rdbuf();\n    string all = ss.str();\n    vector<string> tok;\n    {\n        stringstream iss(all);\n        string w;\n        while (iss >> w) tok.push_back(w);\n    }\n    int i = 0;\n    int n = stoi(tok[i++]);\n    vector<int> prices; for (int j=0;j<n;j++) { prices.push_back(stoi(tok[i++])); }\n    auto ans = maxProfit(prices);\n    cout << ans << endl;\n    return 0;\n}\n"
+      },
+      "testCases": [
+        {
+          "input": "6\n7 1 5 3 6 4",
+          "expectedOutput": "5",
+          "sizeBucket": "small",
+          "weight": 20,
+          "isHidden": false
+        },
+        {
+          "input": "5\n7 6 4 3 1",
+          "expectedOutput": "0",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        },
+        {
+          "input": "1\n5",
+          "expectedOutput": "0",
+          "sizeBucket": "small",
+          "weight": 40,
+          "isHidden": true
+        }
+      ]
+    }
+  ]

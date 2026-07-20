@@ -27,6 +27,22 @@ go run ./cmd/server
 
 API runs at `http://localhost:8080`
 
+### Bulk import problems
+
+Append only, leaving existing `problemId`s untouched:
+
+```bash
+cd duecit
+go run ./cmd/import-problems -mode=skip problems/all_easy.json problems/all_medium.json problems/all_hard.json
+```
+
+Overwrite matching `problemId`s and replace their test cases:
+
+```bash
+cd duecit
+go run ./cmd/import-problems -mode=overwrite problems/all_easy.json problems/all_medium.json problems/all_hard.json
+```
+
 ### 3. Start Next.js frontend
 
 ```bash

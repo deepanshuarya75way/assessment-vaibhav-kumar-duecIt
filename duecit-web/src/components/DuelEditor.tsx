@@ -1,8 +1,18 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useRef, useCallback, useEffect } from 'react';
-import Editor, { OnMount } from '@monaco-editor/react';
+import type { OnMount } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
+
+const Editor = dynamic(() => import('@monaco-editor/react'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full bg-[#1e1e1e] text-zinc-400 text-sm flex items-center justify-center">
+      Loading editor...
+    </div>
+  ),
+});
 
 export const LANGUAGES = [
   { id: 'python', label: 'Python 3' },
@@ -66,7 +76,7 @@ export default function DuelEditor({
   }, [value]);
 
   const handleMount: OnMount = useCallback(
-    (ed) => {
+    (ed, monaco) => {
       editorRef.current = ed;
 
       ed.onDidPaste(() => {
@@ -74,8 +84,7 @@ export default function DuelEditor({
       });
 
       ed.addCommand(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (window as any).monaco?.KeyMod?.CtrlCmd | (window as any).monaco?.KeyCode?.KeyV,
+        monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV,
         () => { /* blocked */ }
       );
 
@@ -132,7 +141,7 @@ export default function DuelEditor({
             💡 Write only your{' '}
             <code className="bg-zinc-700 px-1 rounded">
               {signature?.funcName
-                ? `${signature.funcName}(${signature.params.join(', ')})`
+                ? `${signature.funcName}(${(signature.params || []).join(', ')})`
                 : 'solve()'}
             </code>{' '}
             function, I/O is handled automatically

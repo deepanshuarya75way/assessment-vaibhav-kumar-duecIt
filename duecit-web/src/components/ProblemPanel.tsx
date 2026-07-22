@@ -37,6 +37,8 @@ export default function ProblemPanel({
   ioMode = 'raw',
   signature,
 }: ProblemPanelProps) {
+  const safeSamples = Array.isArray(samples) ? samples : [];
+
   return (
     <div
       className="relative h-full overflow-y-auto cf-panel p-4 select-none problem-statement"
@@ -96,7 +98,7 @@ export default function ProblemPanel({
             </p>
             {signature?.funcName ? (
               <pre className="whitespace-pre-wrap font-mono text-xs bg-[#f8f8f8] border border-[#ddd] p-2">
-                {`${signature.funcName}(${signature.params.join(', ')})`}
+                {`${signature.funcName}(${(signature.params || []).join(', ')})`}
               </pre>
             ) : (
               <p className="text-[var(--cf-muted)]">
@@ -127,7 +129,7 @@ print(max(arr))  # replace with your logic`}</pre>
       </Section>
 
       <Section title="Examples">
-        {samples.map((s, i) => (
+        {safeSamples.map((s, i) => (
           <div key={i} className="mb-3">
             <div className="font-bold text-xs mb-1">Example {i + 1}</div>
             <div className="font-mono text-xs">

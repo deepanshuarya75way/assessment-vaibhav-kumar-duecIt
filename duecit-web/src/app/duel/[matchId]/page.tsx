@@ -31,6 +31,69 @@ interface Problem {
   driverLanguages?: string[];
 }
 
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
+
+function toNumber(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeProblem(value: unknown): Problem {
+  const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const signatureRaw = raw.signature && typeof raw.signature === 'object'
+    ? raw.signature as Record<string, unknown>
+    : null;
+  const signature = signatureRaw
+    ? {
+        funcName: typeof signatureRaw.funcName === 'string' ? signatureRaw.funcName : '',
+        params: toStringArray(signatureRaw.params),
+        returnType: typeof signatureRaw.returnType === 'string' ? signatureRaw.returnType : '',
+      }
+    : undefined;
+
+  const starterRaw = raw.starterCode && typeof raw.starterCode === 'object'
+    ? raw.starterCode as Record<string, unknown>
+    : {};
+  const starterCode = Object.fromEntries(
+    Object.entries(starterRaw).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+  );
+
+  const samples = Array.isArray(raw.samples)
+    ? raw.samples.map((sample) => {
+        const s = sample && typeof sample === 'object' ? sample as Record<string, unknown> : {};
+        return {
+          input: typeof s.input === 'string' ? s.input : '',
+          output: typeof s.output === 'string' ? s.output : '',
+        };
+      })
+    : [];
+
+  return {
+    id: typeof raw.id === 'string' ? raw.id : '',
+    title: typeof raw.title === 'string' ? raw.title : 'Untitled problem',
+    statement: typeof raw.statement === 'string' ? raw.statement : '',
+    inputFormat: typeof raw.inputFormat === 'string' ? raw.inputFormat : '',
+    outputFormat: typeof raw.outputFormat === 'string' ? raw.outputFormat : '',
+    constraints: typeof raw.constraints === 'string' ? raw.constraints : '',
+    difficulty: typeof raw.difficulty === 'string' ? raw.difficulty : undefined,
+    samples,
+    starterCode,
+    signature,
+    driverLanguages: toStringArray(raw.driverLanguages),
+  };
+}
+
+function normalizeOpponent(value: unknown): Opponent {
+  const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return {
+    userId: typeof raw.userId === 'string' ? raw.userId : '',
+    username: typeof raw.username === 'string' ? raw.username : 'opponent',
+    rating: toNumber(raw.rating),
+  };
+}
+
 // Single source of truth for "is this problem+language function-only or raw
 // full-program". Used by both the banner/instructions render AND
 // loadStarterCode below - previously these were two separate inline checks
@@ -56,6 +119,7 @@ interface MatchState {
   problem: Problem;
   opponent: Opponent;
   mode: string;
+  language: string;
   serverTime: number;
   codingStartsAt: number;
   codingEndsAt: number;
@@ -95,15 +159,17 @@ export default function DuelPage() {
   }, []);
 
   const initMatch = useCallback((data: Record<string, unknown>) => {
+    const matchLanguage = typeof data.language === 'string' && data.language ? data.language : 'python';
     const m: MatchState = {
-      matchId: data.matchId as string,
-      problem: data.problem as Problem,
-      opponent: data.opponent as Opponent,
-      mode: data.mode as string,
-      serverTime: data.serverTime as number,
-      codingStartsAt: data.codingStartsAt as number,
-      codingEndsAt: data.codingEndsAt as number,
-      readPhaseSec: data.readPhaseSec as number,
+      matchId: typeof data.matchId === 'string' ? data.matchId : matchId,
+      problem: normalizeProblem(data.problem),
+      opponent: normalizeOpponent(data.opponent),
+      mode: typeof data.mode === 'string' ? data.mode : 'competitive',
+      language: matchLanguage,
+      serverTime: toNumber(data.serverTime) || Date.now(),
+      codingStartsAt: toNumber(data.codingStartsAt),
+      codingEndsAt: toNumber(data.codingEndsAt),
+      readPhaseSec: toNumber(data.readPhaseSec),
     };
     setMatch(m);
     setLoadError('');
@@ -111,7 +177,8 @@ export default function DuelPage() {
     // Only load starter code ONCE — never overwrite the user's typed code
     if (!matchInitialized.current) {
       matchInitialized.current = true;
-      loadStarterCode(language, m.problem);
+      setLanguage(matchLanguage);
+      loadStarterCode(matchLanguage, m.problem);
     }
 
     const now = Date.now();
@@ -119,7 +186,7 @@ export default function DuelPage() {
     const serverPhase = data.phase as string;
     if (status === 'finished' || serverPhase === 'finished') {
       setPhase('finished');
-    } else if (now >= m.codingStartsAt || serverPhase === 'coding') {
+    } else if ((m.codingStartsAt > 0 && now >= m.codingStartsAt) || serverPhase === 'coding') {
       setPhase('coding');
     } else {
       setPhase('reading');
@@ -129,7 +196,7 @@ export default function DuelPage() {
       setSubmitted(true);
       setRunResult('Submitted — waiting for opponent or timeout...');
     }
-  }, [language, loadStarterCode]);
+  }, [matchId, loadStarterCode]);
 
   const fetchMatchResult = useCallback(async () => {
     try {
@@ -155,9 +222,9 @@ export default function DuelPage() {
         if (!prev) return prev;
         return {
           ...prev,
-          serverTime: (d.serverTime as number) ?? prev.serverTime,
-          codingStartsAt: (d.codingStartsAt as number) ?? prev.codingStartsAt,
-          codingEndsAt: (d.codingEndsAt as number) ?? prev.codingEndsAt,
+          serverTime: toNumber(d.serverTime) || prev.serverTime,
+          codingStartsAt: toNumber(d.codingStartsAt) || prev.codingStartsAt,
+          codingEndsAt: toNumber(d.codingEndsAt) || prev.codingEndsAt,
         };
       });
 
@@ -257,7 +324,7 @@ export default function DuelPage() {
   }, [match, phase, syncMatchDetails]);
 
   useEffect(() => {
-    if (phase !== 'finished' && !results && match && Date.now() >= match.codingEndsAt) {
+    if (phase !== 'finished' && !results && match && match.codingEndsAt > 0 && Date.now() >= match.codingEndsAt) {
       const id = setTimeout(() => fetchMatchResult().catch(() => {}), 0);
       return () => clearTimeout(id);
     }

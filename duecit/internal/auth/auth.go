@@ -2,8 +2,13 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -25,7 +30,7 @@ type Claims struct {
 }
 
 type Service struct {
-	cfg  *config.Config
+	cfg   *config.Config
 	users *mongo.Collection
 }
 
@@ -52,6 +57,20 @@ func HashPassword(password string) (string, error) {
 
 func CheckPassword(hash, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}
+
+func newPasswordResetToken() (string, string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", err
+	}
+	token := base64.RawURLEncoding.EncodeToString(b)
+	return token, hashPasswordResetToken(token), nil
+}
+
+func hashPasswordResetToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 func (s *Service) GenerateAccessToken(user *models.User) (string, error) {
@@ -220,6 +239,80 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (string, str
 func (s *Service) Logout(ctx context.Context, userID primitive.ObjectID) error {
 	_, err := s.users.UpdateOne(ctx, bson.M{"_id": userID}, bson.M{"$unset": bson.M{"refreshToken": ""}})
 	return err
+}
+
+func (s *Service) RequestPasswordReset(ctx context.Context, email string) error {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return nil
+	}
+
+	var user models.User
+	err := s.users.FindOne(ctx, bson.M{"email": email}).Decode(&user)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil
+		}
+		return err
+	}
+	if user.PasswordHash == "" {
+		return nil
+	}
+
+	token, tokenHash, err := newPasswordResetToken()
+	if err != nil {
+		return err
+	}
+	expiresAt := time.Now().Add(s.cfg.PasswordResetExpiry)
+
+	_, err = s.users.UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{"$set": bson.M{
+		"passwordResetTokenHash": tokenHash,
+		"passwordResetExpiresAt": expiresAt,
+		"updatedAt":              time.Now(),
+	}})
+	if err != nil {
+		return err
+	}
+
+	resetURL := s.cfg.FrontendURL + "/reset-password?token=" + url.QueryEscape(token)
+	return s.SendPasswordResetEmail(ctx, &user, resetURL)
+}
+
+func (s *Service) ResetPassword(ctx context.Context, token, password string) error {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return errors.New("invalid or expired reset token")
+	}
+
+	passwordHash, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+
+	filter := bson.M{
+		"passwordResetTokenHash": hashPasswordResetToken(token),
+		"passwordResetExpiresAt": bson.M{"$gt": time.Now()},
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"passwordHash": passwordHash,
+			"updatedAt":    time.Now(),
+		},
+		"$unset": bson.M{
+			"passwordResetTokenHash": "",
+			"passwordResetExpiresAt": "",
+			"refreshToken":           "",
+		},
+	}
+
+	res, err := s.users.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return errors.New("invalid or expired reset token")
+	}
+	return nil
 }
 
 func (s *Service) GetUserByUsername(ctx context.Context, username string) (*models.User, error) {

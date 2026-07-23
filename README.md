@@ -62,6 +62,7 @@ Frontend runs at `http://localhost:3000`
 - Language selection in the duel editor (per player)
 - Profile pages with rating history and recent duels
 - OAuth login (Google, GitHub — configure in `.env`)
+- Password reset via email confirmation (SMTP-configured in `.env`)
 - Admin portal: monitoring + problems/test cases only (no matchmaking)
 
 ## API Endpoints
@@ -70,6 +71,8 @@ Frontend runs at `http://localhost:3000`
 |--------|------|-------------|
 | POST | `/api/auth/register` | Register |
 | POST | `/api/auth/login` | Login |
+| POST | `/api/auth/password/forgot` | Email a password reset link |
+| POST | `/api/auth/password/reset` | Confirm reset token and set password |
 | GET | `/api/user/me` | Current user |
 | POST | `/api/match/queue/join` | Join matchmaking |
 | POST | `/api/submission/:id/run` | Run against samples |

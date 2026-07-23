@@ -7,21 +7,23 @@ import (
 )
 
 type User struct {
-	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Username      string             `bson:"username" json:"username"`
-	Email         string             `bson:"email" json:"email"`
-	PasswordHash  string             `bson:"passwordHash,omitempty" json:"-"`
-	RatingDSA     int                `bson:"ratingDSA" json:"ratingDSA"`
-	RatingDB      int                `bson:"ratingDB" json:"ratingDB"`
-	MatchesPlayed int                `bson:"matchesPlayed" json:"matchesPlayed"`
-	Wins          int                `bson:"wins" json:"wins"`
-	Role          string             `bson:"role" json:"role"`
-	OAuthProvider string             `bson:"oauthProvider,omitempty" json:"oauthProvider,omitempty"`
-	OAuthID       string             `bson:"oauthId,omitempty" json:"-"`
-	AvatarURL     string             `bson:"avatarUrl,omitempty" json:"avatarUrl,omitempty"`
-	RefreshToken  string             `bson:"refreshToken,omitempty" json:"-"`
-	CreatedAt     time.Time          `bson:"createdAt" json:"createdAt"`
-	UpdatedAt     time.Time          `bson:"updatedAt" json:"updatedAt"`
+	ID             primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Username       string             `bson:"username" json:"username"`
+	Email          string             `bson:"email" json:"email"`
+	PasswordHash   string             `bson:"passwordHash,omitempty" json:"-"`
+	RatingDSA      int                `bson:"ratingDSA" json:"ratingDSA"`
+	RatingDB       int                `bson:"ratingDB" json:"ratingDB"`
+	MatchesPlayed  int                `bson:"matchesPlayed" json:"matchesPlayed"`
+	Wins           int                `bson:"wins" json:"wins"`
+	Role           string             `bson:"role" json:"role"`
+	OAuthProvider  string             `bson:"oauthProvider,omitempty" json:"oauthProvider,omitempty"`
+	OAuthID        string             `bson:"oauthId,omitempty" json:"-"`
+	AvatarURL      string             `bson:"avatarUrl,omitempty" json:"avatarUrl,omitempty"`
+	RefreshToken   string             `bson:"refreshToken,omitempty" json:"-"`
+	ResetTokenHash string             `bson:"passwordResetTokenHash,omitempty" json:"-"`
+	ResetExpiresAt *time.Time         `bson:"passwordResetExpiresAt,omitempty" json:"-"`
+	CreatedAt      time.Time          `bson:"createdAt" json:"createdAt"`
+	UpdatedAt      time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
 
 type Sample struct {
@@ -139,30 +141,30 @@ type RatingChange struct {
 }
 
 type Match struct {
-	ID              primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
-	PlayerA         primitive.ObjectID   `bson:"playerA" json:"playerA"`
-	PlayerB         primitive.ObjectID   `bson:"playerB" json:"playerB"`
-	ProblemID       string               `bson:"problemId" json:"problemId"`
-	Category        string               `bson:"category" json:"category"`
-	Difficulty      string               `bson:"difficulty" json:"difficulty"`
-	Mode            string               `bson:"mode" json:"mode"`
-	Language        string               `bson:"language" json:"language"`
-	Status          string               `bson:"status" json:"status"`
-	Phase           string               `bson:"phase" json:"phase"`
-	Winner          *primitive.ObjectID  `bson:"winner,omitempty" json:"winner,omitempty"`
-	IsDraw          bool                 `bson:"isDraw" json:"isDraw"`
-	StartTime       time.Time            `bson:"startTime" json:"startTime"`
-	CodingStartsAt  *time.Time           `bson:"codingStartsAt,omitempty" json:"codingStartsAt,omitempty"`
-	CodingEndsAt    *time.Time           `bson:"codingEndsAt,omitempty" json:"codingEndsAt,omitempty"`
-	EndTime         *time.Time           `bson:"endTime,omitempty" json:"endTime,omitempty"`
-	ReadPhaseSec    int                  `bson:"readPhaseSec" json:"readPhaseSec"`
-	CodingPhaseSec  int                  `bson:"codingPhaseSec" json:"codingPhaseSec"`
-	Submissions     []primitive.ObjectID `bson:"submissions" json:"submissions"`
-	RatingChanges   RatingChange         `bson:"ratingChanges" json:"ratingChanges"`
-	PlayerAPenalty  int                  `bson:"playerAPenalty" json:"playerAPenalty"`
-	PlayerBPenalty  int                  `bson:"playerBPenalty" json:"playerBPenalty"`
-	CreatedAt       time.Time            `bson:"createdAt" json:"createdAt"`
-	UpdatedAt       time.Time            `bson:"updatedAt" json:"updatedAt"`
+	ID             primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
+	PlayerA        primitive.ObjectID   `bson:"playerA" json:"playerA"`
+	PlayerB        primitive.ObjectID   `bson:"playerB" json:"playerB"`
+	ProblemID      string               `bson:"problemId" json:"problemId"`
+	Category       string               `bson:"category" json:"category"`
+	Difficulty     string               `bson:"difficulty" json:"difficulty"`
+	Mode           string               `bson:"mode" json:"mode"`
+	Language       string               `bson:"language" json:"language"`
+	Status         string               `bson:"status" json:"status"`
+	Phase          string               `bson:"phase" json:"phase"`
+	Winner         *primitive.ObjectID  `bson:"winner,omitempty" json:"winner,omitempty"`
+	IsDraw         bool                 `bson:"isDraw" json:"isDraw"`
+	StartTime      time.Time            `bson:"startTime" json:"startTime"`
+	CodingStartsAt *time.Time           `bson:"codingStartsAt,omitempty" json:"codingStartsAt,omitempty"`
+	CodingEndsAt   *time.Time           `bson:"codingEndsAt,omitempty" json:"codingEndsAt,omitempty"`
+	EndTime        *time.Time           `bson:"endTime,omitempty" json:"endTime,omitempty"`
+	ReadPhaseSec   int                  `bson:"readPhaseSec" json:"readPhaseSec"`
+	CodingPhaseSec int                  `bson:"codingPhaseSec" json:"codingPhaseSec"`
+	Submissions    []primitive.ObjectID `bson:"submissions" json:"submissions"`
+	RatingChanges  RatingChange         `bson:"ratingChanges" json:"ratingChanges"`
+	PlayerAPenalty int                  `bson:"playerAPenalty" json:"playerAPenalty"`
+	PlayerBPenalty int                  `bson:"playerBPenalty" json:"playerBPenalty"`
+	CreatedAt      time.Time            `bson:"createdAt" json:"createdAt"`
+	UpdatedAt      time.Time            `bson:"updatedAt" json:"updatedAt"`
 }
 
 // Public problem view (no hidden test data)
@@ -222,7 +224,7 @@ const (
 	MatchStatusFinished  = "finished"
 	MatchStatusCancelled = "cancelled"
 
-	PhaseReading = "reading"
-	PhaseCoding  = "coding"
+	PhaseReading  = "reading"
+	PhaseCoding   = "coding"
 	PhaseFinished = "finished"
 )

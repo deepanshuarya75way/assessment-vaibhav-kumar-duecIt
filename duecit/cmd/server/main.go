@@ -92,6 +92,8 @@ func main() {
 		api.Route("/auth", func(ar chi.Router) {
 			ar.Post("/register", h.Register)
 			ar.Post("/login", h.Login)
+			ar.Post("/password/forgot", h.ForgotPassword)
+			ar.Post("/password/reset", h.ResetPassword)
 			ar.Post("/refresh", h.Refresh)
 			ar.Get("/oauth/providers", h.OAuthProviders)
 			ar.Get("/oauth/{provider}", h.OAuthStart)

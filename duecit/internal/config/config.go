@@ -31,6 +31,12 @@ type Config struct {
 	GoogleClientSecret     string
 	GitHubClientID         string
 	GitHubClientSecret     string
+	SMTPHost               string
+	SMTPPort               string
+	SMTPUser               string
+	SMTPPass               string
+	SMTPFrom               string
+	PasswordResetExpiry    time.Duration
 }
 
 func Load() *Config {
@@ -62,6 +68,12 @@ func Load() *Config {
 		GoogleClientSecret:     getEnv("GOOGLE_CLIENT_SECRET", ""),
 		GitHubClientID:         getEnv("GITHUB_CLIENT_ID", ""),
 		GitHubClientSecret:     getEnv("GITHUB_CLIENT_SECRET", ""),
+		SMTPHost:               getEnv("SMTP_HOST", ""),
+		SMTPPort:               getEnv("SMTP_PORT", "587"),
+		SMTPUser:               getEnv("SMTP_USER", ""),
+		SMTPPass:               getEnv("SMTP_PASS", ""),
+		SMTPFrom:               getEnv("SMTP_FROM", ""),
+		PasswordResetExpiry:    parseDuration(getEnv("PASSWORD_RESET_EXPIRY", "1h"), time.Hour),
 	}
 }
 

@@ -137,6 +137,18 @@ export const api = {
       body: JSON.stringify({ login, password }),
     }),
 
+  forgotPassword: (email: string) =>
+    request<void>('/api/auth/password/forgot', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (token: string, password: string) =>
+    request<void>('/api/auth/password/reset', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    }),
+
   me: () => request<User>('/api/user/me'),
 
   getProfile: (username: string) =>

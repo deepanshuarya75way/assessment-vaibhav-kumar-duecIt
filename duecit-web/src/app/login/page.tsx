@@ -83,6 +83,11 @@ export default function LoginPage() {
                 required
               />
             </label>
+            <div className="text-right">
+              <Link href="/forgot-password" className="text-xs text-[var(--cf-blue)] underline">
+                Forgot password?
+              </Link>
+            </div>
             <button type="submit" disabled={loading} className="cf-btn w-full py-2 disabled:opacity-50">
               {loading ? 'Logging in...' : 'Login'}
             </button>

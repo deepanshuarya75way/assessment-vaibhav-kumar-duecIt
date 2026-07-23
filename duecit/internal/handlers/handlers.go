@@ -72,6 +72,45 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type forgotPasswordReq struct {
+	Email string `json:"email"`
+}
+
+func (h *Handlers) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var req forgotPasswordReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid request")
+		return
+	}
+	if err := h.Auth.RequestPasswordReset(r.Context(), req.Email); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Could not process password reset")
+		return
+	}
+	response.JSON(w, http.StatusOK, "If an account exists for that email, a reset link has been sent", nil)
+}
+
+type resetPasswordReq struct {
+	Token    string `json:"token"`
+	Password string `json:"password"`
+}
+
+func (h *Handlers) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req resetPasswordReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid request")
+		return
+	}
+	if len(req.Password) < 8 {
+		response.Error(w, http.StatusBadRequest, "Password must be at least 8 characters")
+		return
+	}
+	if err := h.Auth.ResetPassword(r.Context(), req.Token, req.Password); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, "Password reset", nil)
+}
+
 func (h *Handlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RefreshToken string `json:"refreshToken"`

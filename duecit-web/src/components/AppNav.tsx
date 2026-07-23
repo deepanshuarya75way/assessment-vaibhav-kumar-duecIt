@@ -30,32 +30,29 @@ export default function AppNav() {
         <Link href={user ? '/dashboard' : '/'} className="font-bold text-base no-underline hover:no-underline">
           DuecIt
         </Link>
-        {user && (
-          <>
-            <Link href="/dashboard">Home</Link>
-            <Link href={`/profile/${user.username}`}>Profile</Link>
-            {user.role === 'admin' && <Link href="/admin">Admin</Link>}
-          </>
-        )}
+        
       </div>
       <div className="flex items-center gap-4">
         {user ? (
           <>
-            <span>
+            <span className="text-black/90 hover:no-underline px-2 py-1">
               <Link href={`/profile/${user.username}`} className="font-bold">
                 {user.username}
               </Link>
               {' '}
-              <span className={ratingClass(user.ratingDSA)}>({user.ratingDSA})</span>
+              <> <span className="border-rounded-xl bg-white/90 text-black/90 text-bold hover:no-underline px-2 py-1">
+              <span className={ratingClass(user.ratingDSA) } >{user.ratingDSA} </span>
+              </span>
+              </>
             </span>
-            <button onClick={handleLogout} className="text-white/90 hover:underline bg-transparent border-none cursor-pointer text-sm">
+            <button onClick={handleLogout} className="cf-btn-danger">
               Logout
             </button>
           </>
         ) : (
           <>
-            <Link href="/login">Login</Link>
-            <Link href="/register">Register</Link>
+            <Link href="/login" className="cf-btn">Login </Link>
+            <Link href="/register" className="cf-btn">Register</Link>
           </>
         )}
       </div>

@@ -22,7 +22,7 @@ export default function Home() {
       <main className="max-w-3xl mx-auto px-4 py-16 text-center">
         <h1 className="text-4xl font-bold mb-3 text-[var(--cf-blue)]">DuecIt</h1>
         <p className="text-[var(--cf-muted)] mb-8 text-base">
-          Real-time 1v1 coding duels. ELO matchmaking. Codeforces-style competitive programming.
+          Get Your True Competitor For 1V1 Coding.
         </p>
         <div className="flex gap-3 justify-center mb-12">
           <Link href="/login" className="cf-btn px-6 py-2 no-underline font-bold">

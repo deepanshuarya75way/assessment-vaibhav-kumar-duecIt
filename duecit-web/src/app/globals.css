@@ -7,6 +7,7 @@
   --cf-orange: #ff8c00;
   --cf-green: #008000;
   --cf-red: #ff0000;
+  --cf-red-dark:#880606;
   --cf-bg: #f5f5f5;
   --cf-panel: #ffffff;
   --cf-border: #b9b9b9;
@@ -23,7 +24,7 @@ body {
 }
 
 .cf-nav {
-  background: var(--cf-blue);
+  background: var(--cf-blue-dark);
   color: #fff;
 }
 
@@ -54,7 +55,19 @@ body {
 .cf-btn:hover {
   background: var(--cf-blue-dark);
 }
+.cf-btn-danger {
+  background: var(--cf-red);
+  color: #fff;
+  border: 1px solid var(--cf-blue-dark);
+  padding: 4px 12px;
+  font-family: Verdana, Arial, sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+}
 
+.cf-btn-danger:hover {
+  background: var(--cf-red-dark);
+}
 .cf-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -103,7 +116,7 @@ body {
 .rating-candidate { color: #0000ff; font-weight: bold; }
 .rating-specialist { color: #008000; font-weight: bold; }
 .rating-pupil { color: #008000; }
-.rating-newbie { color: #808080; }
+.rating-newbie { color: #1b1a1a; }
 
 .diff-easy { color: var(--cf-green); font-weight: bold; }
 .diff-medium { color: var(--cf-orange); font-weight: bold; }

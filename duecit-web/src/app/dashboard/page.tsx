@@ -137,10 +137,10 @@ export default function DashboardPage() {
                 <td className={ratingClass(user.ratingDSA)}>{user.ratingDSA}</td>
                 <td rowSpan={2} className="align-middle">{user.matchesPlayed}</td>
               </tr>
-              <tr>
+              {/* <tr>
                 <td>Database</td>
                 <td className={ratingClass(user.ratingDB)}>{user.ratingDB}</td>
-              </tr>
+              </tr> */}
             </tbody>
           </table>
           <p className="mt-2 text-[var(--cf-muted)] text-xs">
@@ -167,7 +167,7 @@ export default function DashboardPage() {
                 className="cf-select w-full"
               >
                 <option value="dsa">DSA</option>
-                <option value="db">Database</option>
+                {/* <option value="db">Database</option> */}
               </select>
             </label>
             <label>

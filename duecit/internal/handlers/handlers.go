@@ -491,7 +491,10 @@ func (h *Handlers) AdminUpdateProblem(w http.ResponseWriter, r *http.Request) {
 	_, touchedSpec := update["inputSpec"]
 	_, touchedStarter := update["starterCode"]
 	if (touchedSig || touchedSpec) && !touchedStarter && p.Signature.FuncName != "" {
-		p.StarterCode = judge.GenerateAllStarterCode(p.InputSpec, p.Signature)
+		p.StarterCode = judge.AllCompetitiveTemplates()
+		for lang, code := range judge.GenerateAllStarterCode(p.InputSpec, p.Signature) {
+			p.StarterCode[lang] = code
+		}
 		p, err = h.Problems.UpdateProblem(r.Context(), problemID, map[string]interface{}{
 			"starterCode": p.StarterCode,
 		})

@@ -182,6 +182,7 @@ type ProblemPublic struct {
 	Difficulty   string            `json:"difficulty"`
 	Tags         []string          `json:"tags"`
 	StarterCode  map[string]string `json:"starterCode,omitempty"`
+	InputSpec    []InputVar        `json:"inputSpec,omitempty"`
 	Signature    FuncSignature     `json:"signature,omitempty"`
 	// DriverLanguages: which languages have a hand-written driver
 	// configured, so the frontend can show "write only the function"
@@ -206,6 +207,7 @@ func (p *Problem) ToPublic() ProblemPublic {
 		Difficulty:      p.Difficulty,
 		Tags:            p.Tags,
 		StarterCode:     p.StarterCode,
+		InputSpec:       p.InputSpec,
 		Signature:       p.Signature,
 		DriverLanguages: driverLangs,
 	}

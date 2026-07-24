@@ -43,7 +43,7 @@ func GenerateAllStarterCode(spec []models.InputVar, sig models.FuncSignature) ma
 	out := map[string]string{}
 	for _, lang := range []string{"python", "javascript", "go", "java", "cpp", "c"} {
 		if code := GenerateStarterCode(spec, sig, lang); code != "" {
-			out[lang] = code
+			out[lang+"_practice"] = code
 		}
 	}
 	return out

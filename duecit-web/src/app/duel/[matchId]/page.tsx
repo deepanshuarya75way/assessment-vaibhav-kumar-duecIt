@@ -27,8 +27,16 @@ interface Problem {
   difficulty?: string;
   samples: { input: string; output: string }[];
   starterCode?: Record<string, string>;
+  inputSpec?: InputVar[];
   signature?: { funcName: string; params: string[]; returnType: string };
   driverLanguages?: string[];
+}
+
+interface InputVar {
+  name: string;
+  type: string;
+  lengthVar?: string;
+  passToFunc?: boolean;
 }
 
 function toStringArray(value: unknown): string[] {
@@ -60,6 +68,18 @@ function normalizeProblem(value: unknown): Problem {
     Object.entries(starterRaw).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
   );
 
+  const inputSpec = Array.isArray(raw.inputSpec)
+    ? raw.inputSpec.map((item) => {
+        const v = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+        return {
+          name: typeof v.name === 'string' ? v.name : '',
+          type: typeof v.type === 'string' ? v.type : 'string',
+          lengthVar: typeof v.lengthVar === 'string' ? v.lengthVar : undefined,
+          passToFunc: typeof v.passToFunc === 'boolean' ? v.passToFunc : undefined,
+        };
+      }).filter((v) => v.name)
+    : [];
+
   const samples = Array.isArray(raw.samples)
     ? raw.samples.map((sample) => {
         const s = sample && typeof sample === 'object' ? sample as Record<string, unknown> : {};
@@ -80,6 +100,7 @@ function normalizeProblem(value: unknown): Problem {
     difficulty: typeof raw.difficulty === 'string' ? raw.difficulty : undefined,
     samples,
     starterCode,
+    inputSpec,
     signature,
     driverLanguages: toStringArray(raw.driverLanguages),
   };
@@ -106,6 +127,141 @@ function computeIoMode(problem: Problem | undefined, language: string): 'functio
   const hasDriver = !!problem.driverLanguages?.includes(language);
   const hasAutoWrapper = WRAPPER_SUPPORTED_LANGS.includes(language) && !!problem.signature?.funcName;
   return hasDriver || hasAutoWrapper ? 'function' : 'raw';
+}
+
+function hasHiddenDriver(problem: Problem | undefined, language: string) {
+  return !!problem?.driverLanguages?.includes(language);
+}
+
+function getParamType(problem: Problem, param: string) {
+  return problem.inputSpec?.find((v) => v.name === param)?.type || 'string';
+}
+
+function getParamSpec(problem: Problem, param: string) {
+  return problem.inputSpec?.find((v) => v.name === param);
+}
+
+function javaType(type: string) {
+  const map: Record<string, string> = {
+    int: 'int',
+    float: 'double',
+    bool: 'boolean',
+    string: 'String',
+    'int[]': 'int[]',
+    'float[]': 'double[]',
+    'string[]': 'String[]',
+  };
+  return map[type] || 'Object';
+}
+
+function cppType(type: string) {
+  const map: Record<string, string> = {
+    int: 'int',
+    float: 'double',
+    bool: 'bool',
+    string: 'string',
+    'int[]': 'vector<int>',
+    'float[]': 'vector<double>',
+    'string[]': 'vector<string>',
+  };
+  return map[type] || 'auto';
+}
+
+function goType(type: string) {
+  const map: Record<string, string> = {
+    int: 'int',
+    float: 'float64',
+    bool: 'bool',
+    string: 'string',
+    'int[]': '[]int',
+    'float[]': '[]float64',
+    'string[]': '[]string',
+  };
+  return map[type] || 'interface{}';
+}
+
+function cType(type: string) {
+  if (type === 'float') return 'double';
+  if (type === 'bool') return 'bool';
+  if (type === 'string') return 'char*';
+  if (type.endsWith('[]')) return type === 'float[]' ? 'double*' : type === 'string[]' ? 'char**' : 'int*';
+  return 'int';
+}
+
+function defaultReturn(type: string, language: string) {
+  if (type.endsWith('[]')) {
+    if (language === 'java') return type === 'int[]' ? 'return new int[0];' : type === 'float[]' ? 'return new double[0];' : 'return new String[0];';
+    if (language === 'cpp') return 'return {};';
+    if (language === 'go') return 'return nil';
+    if (language === 'c') return 'return NULL;';
+    return 'return [];';
+  }
+  if (type === 'bool') return language === 'python' ? 'return False' : 'return false;';
+  if (type === 'string') return language === 'python' ? "return ''" : 'return "";';
+  if (type === 'float') return language === 'python' || language === 'go' ? 'return 0.0' : 'return 0.0;';
+  return language === 'python' || language === 'go' ? 'return 0' : 'return 0;';
+}
+
+function functionSignatureForLanguage(language: string, problem: Problem, driverMode: boolean) {
+  const sig = problem.signature;
+  if (!sig?.funcName) return '';
+  const params = sig.params || [];
+  if (language === 'python') return `def ${sig.funcName}(${params.join(', ')}):`;
+  if (language === 'javascript') return `function ${sig.funcName}(${params.join(', ')})`;
+  if (language === 'go') {
+    const typed = params.map((p) => `${p} ${goType(getParamType(problem, p))}`).join(', ');
+    return `func ${sig.funcName}(${typed}) ${goType(sig.returnType)}`;
+  }
+  if (language === 'java') {
+    const typed = params.map((p) => `${javaType(getParamType(problem, p))} ${p}`).join(', ');
+    const method = `public static ${javaType(sig.returnType)} ${sig.funcName}(${typed})`;
+    return driverMode ? `class Solution { ${method} }` : method;
+  }
+  if (language === 'cpp') {
+    const typed = params.map((p) => {
+      const type = cppType(getParamType(problem, p));
+      return getParamType(problem, p).endsWith('[]') ? `const ${type}& ${p}` : `${type} ${p}`;
+    }).join(', ');
+    return `${cppType(sig.returnType)} ${sig.funcName}(${typed})`;
+  }
+  if (language === 'c') {
+    const typed: string[] = [];
+    params.forEach((p) => {
+      const spec = getParamSpec(problem, p);
+      const type = spec?.type || 'int';
+      typed.push(`${cType(type)} ${p}`);
+      if (type.endsWith('[]')) typed.push(`int ${p}Size`);
+    });
+    if (sig.returnType.endsWith('[]')) typed.push('int* returnSize');
+    return `${cType(sig.returnType)} ${sig.funcName}(${typed.join(', ')})`;
+  }
+  return `${sig.funcName}(${params.join(', ')})`;
+}
+
+function buildFunctionStarter(language: string, problem?: Problem, driverMode = false) {
+  if (!problem?.signature?.funcName) return '';
+  const sigText = functionSignatureForLanguage(language, problem, driverMode);
+  const ret = defaultReturn(problem.signature.returnType, language);
+  if (language === 'python') return `${sigText}\n    # write your logic here\n    ${ret}\n`;
+  if (language === 'javascript') return `${sigText} {\n  // write your logic here\n  ${ret}\n}\n`;
+  if (language === 'java') {
+    const method = functionSignatureForLanguage(language, problem, false);
+    const body = `    ${method} {\n        // write your logic here\n        ${ret}\n    }`;
+    return driverMode ? `class Solution {\n${body}\n}\n` : `${method} {\n    // write your logic here\n    ${ret}\n}\n`;
+  }
+  if (language === 'cpp' || language === 'c' || language === 'go') {
+    const indent = language === 'go' ? '\t' : '    ';
+    return `${sigText} {\n${indent}// write your logic here\n${indent}${ret}\n}\n`;
+  }
+  return '';
+}
+
+function starterLooksFunctionOnly(starter: string, problem: Problem | undefined, language: string) {
+  if (!starter || !problem?.signature?.funcName || !starter.includes(problem.signature.funcName)) return false;
+  const rawProgramMarkers = ['public class Main', 'static void main', 'int main(', 'func main(', 'readFileSync(0', 'Scanner sc'];
+  if (rawProgramMarkers.some((marker) => starter.includes(marker))) return false;
+  if (language === 'java' && hasHiddenDriver(problem, language) && !starter.includes('class Solution')) return false;
+  return true;
 }
 
 interface Opponent {
@@ -153,7 +309,15 @@ export default function DuelPage() {
   const loadStarterCode = useCallback((lang: string, problem?: Problem) => {
     const ioMode = computeIoMode(problem, lang);
     const key = ioMode === 'function' ? `${lang}_practice` : lang;
-    const starter = problem?.starterCode?.[key] || problem?.starterCode?.[lang] || '';
+    const driverMode = hasHiddenDriver(problem, lang);
+    const generated = buildFunctionStarter(lang, problem, driverMode);
+    const practiceStarter = problem?.starterCode?.[key] || '';
+    const legacyStarter = problem?.starterCode?.[lang] || '';
+    const starter = ioMode === 'function'
+      ? (driverMode && generated
+          ? generated
+          : practiceStarter || (starterLooksFunctionOnly(legacyStarter, problem, lang) ? legacyStarter : generated) || '')
+      : legacyStarter;
     setCode(starter);
     prevCodeLen.current = starter.length;
   }, []);
@@ -491,6 +655,10 @@ export default function DuelPage() {
   // NOT tied to competitive vs practice: a competitive match on a problem
   // with a driver/signature is just as function-only as a practice match.
   const ioMode = computeIoMode(match.problem, language);
+  const usesDriver = hasHiddenDriver(match.problem, language);
+  const solutionSignature = ioMode === 'function'
+    ? functionSignatureForLanguage(language, match.problem, usesDriver)
+    : '';
   // Whether this match affects ELO - this is the actual practice/competitive
   // distinction now (see finalizeMatch on the backend).
   const rated = match.mode === 'competitive';
@@ -554,6 +722,9 @@ export default function DuelPage() {
               watermark={watermark}
               ioMode={ioMode}
               signature={match.problem.signature}
+              language={language}
+              solutionSignature={solutionSignature}
+              usesDriver={usesDriver}
             />
           </div>
           <div className="flex flex-col min-h-0 bg-[var(--editor-bg)]">
@@ -568,6 +739,7 @@ export default function DuelPage() {
                 ioMode={ioMode}
                 rated={rated}
                 signature={match.problem.signature}
+                solutionSignature={solutionSignature}
               />
             </div>
             {/* Bottom action bar + test results */}

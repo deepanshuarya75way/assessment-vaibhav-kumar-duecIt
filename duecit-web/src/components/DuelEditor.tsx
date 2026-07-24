@@ -42,11 +42,13 @@ interface DuelEditorProps {
   // function-only if the problem has a signature.
   rated?: boolean;
   signature?: { funcName: string; params: string[] };
+  solutionSignature?: string;
 }
 
 const LANG_MAP: Record<string, string> = {
   python: 'python',
-  javascript: 'javascript',
+  //keeping these below languges nute because of debugging issues
+  javascript: 'javascript', 
   cpp: 'cpp',
   java: 'java',
   go: 'go',
@@ -63,6 +65,7 @@ export default function DuelEditor({
   ioMode = 'raw',
   rated = false,
   signature,
+  solutionSignature,
 }: DuelEditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const prevLenRef = useRef(0);
@@ -127,10 +130,12 @@ export default function DuelEditor({
             value={language}
             onChange={(e) => onLanguageChange?.(e.target.value)}
             disabled={readOnly}
-          >
-            {LANGUAGES.map((l) => (
+           >  
+           {/* this is for using other languages as an option */}
+            {/* {LANGUAGES.map((l) => (
               <option key={l.id} value={l.id}>{l.label}</option>
-            ))}
+            ))} */}  
+            <option key="python" value="python">Python 3</option> {/*replace this with the upper code if want other languages also*/}
           </select>
         </label>
         {readOnly && (
@@ -141,7 +146,7 @@ export default function DuelEditor({
             💡 Write only your{' '}
             <code className="bg-zinc-700 px-1 rounded">
               {signature?.funcName
-                ? `${signature.funcName}(${(signature.params || []).join(', ')})`
+                ? solutionSignature || `${signature.funcName}(${(signature.params || []).join(', ')})`
                 : 'solve()'}
             </code>{' '}
             function, I/O is handled automatically

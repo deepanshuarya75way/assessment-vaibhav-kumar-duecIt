@@ -16,6 +16,9 @@ interface ProblemPanelProps {
   watermark?: string;
   ioMode?: 'function' | 'raw';
   signature?: { funcName: string; params: string[] };
+  language?: string;
+  solutionSignature?: string;
+  usesDriver?: boolean;
 }
 
 function diffClass(d?: string) {
@@ -36,6 +39,9 @@ export default function ProblemPanel({
   watermark,
   ioMode = 'raw',
   signature,
+  language,
+  solutionSignature,
+  usesDriver = false,
 }: ProblemPanelProps) {
   const safeSamples = Array.isArray(samples) ? samples : [];
 
@@ -93,12 +99,12 @@ export default function ProblemPanel({
         {ioMode === 'function' ? (
           <div className="text-xs leading-relaxed space-y-2 bg-[#eaf6ee] border border-[#a8d5b5] p-3">
             <p>
-              Just implement the function below. Reading input and printing your
-              return value are handled for you automatically.
+              Write only the required solution code below. The hidden driver reads
+              input, calls your solution, and prints the returned value.
             </p>
-            {signature?.funcName ? (
+            {solutionSignature || signature?.funcName ? (
               <pre className="whitespace-pre-wrap font-mono text-xs bg-[#f8f8f8] border border-[#ddd] p-2">
-                {`${signature.funcName}(${(signature.params || []).join(', ')})`}
+                {solutionSignature || `${signature?.funcName}(${(signature?.params || []).join(', ')})`}
               </pre>
             ) : (
               <p className="text-[var(--cf-muted)]">
@@ -106,7 +112,9 @@ export default function ProblemPanel({
               </p>
             )}
             <p className="text-[var(--cf-muted)]">
-              Return your answer from the function; don&apos;t read stdin or print anything yourself.
+              {language === 'java' && usesDriver
+                ? 'For Java, keep the Solution class and method shown in the editor. Do not write Main, main(), Scanner, or print statements.'
+                : 'Return your answer from the function; do not read stdin or print anything yourself.'}
             </p>
           </div>
         ) : (

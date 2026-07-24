@@ -13,14 +13,14 @@ const Editor = dynamic(() => import('@monaco-editor/react'), {
     </div>
   ),
 });
-
+// comment here to mute languages
 export const LANGUAGES = [
   { id: 'python', label: 'Python 3' },
-  { id: 'javascript', label: 'JavaScript' },
-  { id: 'cpp', label: 'C++17' },
-  { id: 'java', label: 'Java' },
-  { id: 'go', label: 'Go' },
-  { id: 'c', label: 'C' },
+  // { id: 'javascript', label: 'JavaScript' },
+  // { id: 'cpp', label: 'C++17' },
+  // { id: 'java', label: 'Java' },
+  // { id: 'go', label: 'Go' },
+  // { id: 'c', label: 'C' },
 ] as const;
 
 interface DuelEditorProps {
@@ -131,11 +131,9 @@ export default function DuelEditor({
             onChange={(e) => onLanguageChange?.(e.target.value)}
             disabled={readOnly}
            >  
-           {/* this is for using other languages as an option */}
-            {/* {LANGUAGES.map((l) => (
+            {LANGUAGES.map((l) => (
               <option key={l.id} value={l.id}>{l.label}</option>
-            ))} */}  
-            <option key="python" value="python">Python 3</option> {/*replace this with the upper code if want other languages also*/}
+            ))} 
           </select>
         </label>
         {readOnly && (

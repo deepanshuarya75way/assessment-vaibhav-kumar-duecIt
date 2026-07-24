@@ -108,6 +108,7 @@ type TestCase struct {
 
 type TestResult struct {
 	Passed         bool   `bson:"passed" json:"passed"`
+	Verdict        string `bson:"verdict" json:"verdict"`
 	Input          string `bson:"input,omitempty" json:"input,omitempty"`
 	ExpectedOutput string `bson:"expectedOutput,omitempty" json:"expectedOutput,omitempty"`
 	ActualOutput   string `bson:"actualOutput,omitempty" json:"actualOutput,omitempty"`
@@ -130,6 +131,7 @@ type Submission struct {
 	SolveTimeMs     int64              `bson:"solveTimeMs" json:"solveTimeMs"`
 	PenaltySeconds  int                `bson:"penaltySeconds" json:"penaltySeconds"`
 	TestResults     []TestResult       `bson:"testResults" json:"testResults"`
+	Verdict         string             `bson:"verdict" json:"verdict"`
 	IsFinal         bool               `bson:"isFinal" json:"isFinal"`
 	IsFullAC        bool               `bson:"isFullAC" json:"isFullAC"`
 	SubmittedAt     time.Time          `bson:"submittedAt" json:"submittedAt"`

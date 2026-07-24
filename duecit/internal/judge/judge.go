@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -23,6 +25,16 @@ var languageMap = map[string]string{
 	"c":          "c",
 	"go":         "go",
 }
+
+const (
+	VerdictAccepted            = "AC"
+	VerdictWrongAnswer         = "WA"
+	VerdictCompilationError    = "CE"
+	VerdictRuntimeError        = "RE"
+	VerdictTimeLimitExceeded   = "TLE"
+	VerdictEngineError         = "ENGINE_ERROR"
+	VerdictUnsupportedLanguage = "UNSUPPORTED_LANGUAGE"
+)
 
 type Service struct {
 	cfg    *config.Config
@@ -48,6 +60,7 @@ type pistonRequest struct {
 }
 
 type pistonFile struct {
+	Name    string `json:"name,omitempty"`
 	Content string `json:"content"`
 }
 
@@ -59,7 +72,9 @@ type pistonResponse struct {
 type pistonRun struct {
 	Stdout string `json:"stdout"`
 	Stderr string `json:"stderr"`
+	Output string `json:"output"`
 	Code   int    `json:"code"`
+	Signal string `json:"signal"`
 }
 
 type EvalResult struct {
@@ -67,6 +82,7 @@ type EvalResult struct {
 	TotalCount      int                 `json:"totalCount"`
 	WeightedScore   float64             `json:"weightedScore"`
 	ExecutionTimeMs int64               `json:"executionTimeMs"`
+	Verdict         string              `json:"verdict"`
 	IsFullAC        bool                `json:"isFullAC"`
 	TestResults     []models.TestResult `json:"testResults,omitempty"`
 }
@@ -76,7 +92,7 @@ type OutputChecker func(tc models.TestCase, actualOutput string) bool
 func (s *Service) Evaluate(ctx context.Context, code, language string, testCases []models.TestCase, checkers ...OutputChecker) (*EvalResult, error) {
 	pistonLang, ok := languageMap[language]
 	if !ok {
-		return nil, fmt.Errorf("unsupported language: %s", language)
+		return nil, fmt.Errorf("%s: %s", VerdictUnsupportedLanguage, language)
 	}
 	var checker OutputChecker
 	if len(checkers) > 0 {
@@ -131,6 +147,7 @@ func (s *Service) Evaluate(ctx context.Context, code, language string, testCases
 		TotalCount:      len(testCases),
 		WeightedScore:   weightedScore,
 		ExecutionTimeMs: avgExec,
+		Verdict:         overallVerdict(results),
 		IsFullAC:        passed == len(testCases),
 		TestResults:     results,
 	}, nil
@@ -141,7 +158,7 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 	body, _ := json.Marshal(pistonRequest{
 		Language:       language,
 		Version:        "*",
-		Files:          []pistonFile{{Content: code}},
+		Files:          []pistonFile{{Name: sourceFileName(language), Content: code}},
 		Stdin:          tc.Input,
 		RunTimeout:     3000,
 		CompileTimeout: 10000,
@@ -149,7 +166,7 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.PistonURL+"/execute", bytes.NewReader(body))
 	if err != nil {
-		return models.TestResult{Passed: false, Input: tc.Input, ExpectedOutput: tc.ExpectedOutput, Error: err.Error(), ExecutionTime: 0}
+		return testFailure(tc, VerdictEngineError, err.Error(), 0)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if s.cfg.PistonAuthUser != "" && s.cfg.PistonAuthPass != "" {
@@ -158,7 +175,7 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return models.TestResult{Passed: false, Input: tc.Input, ExpectedOutput: tc.ExpectedOutput, Error: err.Error(), ExecutionTime: time.Since(start).Milliseconds()}
+		return testFailure(tc, classifyRequestError(err), friendlyRequestError(err), time.Since(start).Milliseconds())
 	}
 	defer resp.Body.Close()
 
@@ -189,6 +206,7 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 		}
 		return models.TestResult{
 			Passed:         false,
+			Verdict:        VerdictEngineError,
 			Input:          tc.Input,
 			ExpectedOutput: tc.ExpectedOutput,
 			Error:          "execution engine error: " + msg,
@@ -198,29 +216,182 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 
 	var pr pistonResponse
 	if err := json.Unmarshal(raw, &pr); err != nil {
-		return models.TestResult{Passed: false, Input: tc.Input, ExpectedOutput: tc.ExpectedOutput, Error: err.Error(), ExecutionTime: time.Since(start).Milliseconds()}
+		return testFailure(tc, VerdictEngineError, "could not parse execution engine response: "+err.Error(), time.Since(start).Milliseconds())
 	}
 
 	stdout := strings.TrimSpace(pr.Run.Stdout)
-	stderr := pr.Run.Stderr
-	if pr.Compile != nil && pr.Compile.Stderr != "" {
-		stderr = pr.Compile.Stderr
+	if stdout == "" {
+		stdout = strings.TrimSpace(pr.Run.Output)
+	}
+
+	if pr.Compile != nil && (pr.Compile.Code != 0 || pr.Compile.Signal != "") {
+		return models.TestResult{
+			Passed:         false,
+			Verdict:        VerdictCompilationError,
+			Input:          tc.Input,
+			ExpectedOutput: tc.ExpectedOutput,
+			ActualOutput:   stdout,
+			ExecutionTime:  time.Since(start).Milliseconds(),
+			Error:          cleanError(firstNonEmpty(pr.Compile.Stderr, pr.Compile.Output, "compilation failed")),
+		}
+	}
+
+	if isTimeoutRun(pr.Run) {
+		return models.TestResult{
+			Passed:         false,
+			Verdict:        VerdictTimeLimitExceeded,
+			Input:          tc.Input,
+			ExpectedOutput: tc.ExpectedOutput,
+			ActualOutput:   stdout,
+			ExecutionTime:  time.Since(start).Milliseconds(),
+			Error:          "time limit exceeded",
+		}
+	}
+
+	if pr.Run.Code != 0 || pr.Run.Signal != "" {
+		verdict := VerdictRuntimeError
+		if isInterpretedSyntaxError(language, pr.Run) {
+			verdict = VerdictCompilationError
+		}
+		return models.TestResult{
+			Passed:         false,
+			Verdict:        verdict,
+			Input:          tc.Input,
+			ExpectedOutput: tc.ExpectedOutput,
+			ActualOutput:   stdout,
+			ExecutionTime:  time.Since(start).Milliseconds(),
+			Error:          cleanError(firstNonEmpty(pr.Run.Stderr, pr.Run.Output, fmt.Sprintf("process exited with code %d", pr.Run.Code))),
+		}
 	}
 
 	passed := outputMatches(tc, stdout, checker)
-	errMsg := ""
-	if stderr != "" {
-		errMsg = stderr
+	verdict := VerdictWrongAnswer
+	if passed {
+		verdict = VerdictAccepted
 	}
 
 	return models.TestResult{
 		Passed:         passed,
+		Verdict:        verdict,
 		Input:          tc.Input,
 		ExpectedOutput: tc.ExpectedOutput,
 		ActualOutput:   stdout,
 		ExecutionTime:  time.Since(start).Milliseconds(),
-		Error:          errMsg,
+		Error:          cleanError(pr.Run.Stderr),
 	}
+}
+
+func testFailure(tc models.TestCase, verdict, message string, executionMs int64) models.TestResult {
+	return models.TestResult{
+		Passed:         false,
+		Verdict:        verdict,
+		Input:          tc.Input,
+		ExpectedOutput: tc.ExpectedOutput,
+		Error:          message,
+		ExecutionTime:  executionMs,
+	}
+}
+
+func sourceFileName(language string) string {
+	switch language {
+	case "python":
+		return "main.py"
+	case "javascript":
+		return "main.js"
+	case "cpp":
+		return "main.cpp"
+	case "java":
+		return "Main.java"
+	case "c":
+		return "main.c"
+	case "go":
+		return "main.go"
+	default:
+		return "main.txt"
+	}
+}
+
+func classifyRequestError(err error) string {
+	if isDeadlineError(err) {
+		return VerdictTimeLimitExceeded
+	}
+	return VerdictEngineError
+}
+
+func friendlyRequestError(err error) string {
+	if isDeadlineError(err) {
+		return "execution timed out"
+	}
+	return "execution engine request failed: " + err.Error()
+}
+
+func isDeadlineError(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
+}
+
+func isTimeoutRun(run pistonRun) bool {
+	text := strings.ToLower(firstNonEmpty(run.Stderr, run.Output, run.Signal))
+	if strings.Contains(text, "time limit") || strings.Contains(text, "timed out") || strings.Contains(text, "timeout") {
+		return true
+	}
+	return run.Signal == "SIGKILL" || run.Signal == "SIGTERM"
+}
+
+func isInterpretedSyntaxError(language string, run pistonRun) bool {
+	if language != "python" && language != "javascript" {
+		return false
+	}
+	text := strings.ToLower(firstNonEmpty(run.Stderr, run.Output))
+	return strings.Contains(text, "syntaxerror") || strings.Contains(text, "indentationerror") || strings.Contains(text, "taberror")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func cleanError(s string) string {
+	return strings.TrimSpace(s)
+}
+
+func overallVerdict(results []models.TestResult) string {
+	if len(results) == 0 {
+		return VerdictWrongAnswer
+	}
+	for _, r := range results {
+		if r.Verdict == VerdictCompilationError {
+			return VerdictCompilationError
+		}
+	}
+	for _, r := range results {
+		if r.Verdict == VerdictTimeLimitExceeded {
+			return VerdictTimeLimitExceeded
+		}
+	}
+	for _, r := range results {
+		if r.Verdict == VerdictRuntimeError {
+			return VerdictRuntimeError
+		}
+	}
+	for _, r := range results {
+		if r.Verdict == VerdictEngineError {
+			return VerdictEngineError
+		}
+	}
+	for _, r := range results {
+		if !r.Passed {
+			return VerdictWrongAnswer
+		}
+	}
+	return VerdictAccepted
 }
 
 func outputMatches(tc models.TestCase, actual string, checker OutputChecker) bool {

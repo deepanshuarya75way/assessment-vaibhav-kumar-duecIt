@@ -23,6 +23,15 @@ func GenerateStarterCode(spec []models.InputVar, sig models.FuncSignature, langu
 	case "go":
 		return fmt.Sprintf("func %s(%s) %s {\n\t// write your logic here\n}\n",
 			sig.FuncName, goParamList(spec, sig), goType(sig.ReturnType))
+	case "java":
+		return fmt.Sprintf("public static %s %s(%s) {\n    // write your logic here\n}\n",
+			javaType(sig.ReturnType), sig.FuncName, javaParamList(spec, sig))
+	case "cpp":
+		return fmt.Sprintf("%s %s(%s) {\n    // write your logic here\n}\n",
+			cppType(sig.ReturnType), sig.FuncName, cppParamList(spec, sig))
+	case "c":
+		return fmt.Sprintf("%s %s(%s) {\n    // write your logic here\n}\n",
+			cType(sig.ReturnType), sig.FuncName, cParamList(spec, sig))
 	default:
 		return ""
 	}
@@ -32,7 +41,7 @@ func GenerateStarterCode(spec []models.InputVar, sig models.FuncSignature, langu
 // practice-supported language, ready to store on models.Problem.StarterCode.
 func GenerateAllStarterCode(spec []models.InputVar, sig models.FuncSignature) map[string]string {
 	out := map[string]string{}
-	for _, lang := range []string{"python", "javascript", "go"} {
+	for _, lang := range []string{"python", "javascript", "go", "java", "cpp", "c"} {
 		if code := GenerateStarterCode(spec, sig, lang); code != "" {
 			out[lang] = code
 		}
@@ -55,6 +64,66 @@ func goParamList(spec []models.InputVar, sig models.FuncSignature) string {
 			t = models.TypeString // unknown param, safest fallback
 		}
 		parts[i] = fmt.Sprintf("%s %s", p, goType(t))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func javaParamList(spec []models.InputVar, sig models.FuncSignature) string {
+	byName := map[string]models.ParamType{}
+	for _, v := range spec {
+		byName[v.Name] = v.Type
+	}
+	parts := make([]string, len(sig.Params))
+	for i, p := range sig.Params {
+		parts[i] = fmt.Sprintf("%s %s", javaType(byName[p]), p)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func cppParamList(spec []models.InputVar, sig models.FuncSignature) string {
+	byName := map[string]models.ParamType{}
+	for _, v := range spec {
+		byName[v.Name] = v.Type
+	}
+	parts := make([]string, len(sig.Params))
+	for i, p := range sig.Params {
+		t := cppType(byName[p])
+		switch byName[p] {
+		case models.TypeIntArr, models.TypeFloatArr, models.TypeStringArr:
+			t = "const " + t + "&"
+		}
+		parts[i] = fmt.Sprintf("%s %s", t, p)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func cParamList(spec []models.InputVar, sig models.FuncSignature) string {
+	byName := map[string]models.InputVar{}
+	for _, v := range spec {
+		byName[v.Name] = v
+	}
+	parts := make([]string, 0, len(sig.Params))
+	for _, p := range sig.Params {
+		v := byName[p]
+		switch v.Type {
+		case models.TypeFloat:
+			parts = append(parts, fmt.Sprintf("double %s", p))
+		case models.TypeBool:
+			parts = append(parts, fmt.Sprintf("int %s", p))
+		case models.TypeString:
+			parts = append(parts, fmt.Sprintf("char* %s", p))
+		case models.TypeIntArr:
+			parts = append(parts, fmt.Sprintf("int %s[]", p))
+		case models.TypeFloatArr:
+			parts = append(parts, fmt.Sprintf("double %s[]", p))
+		case models.TypeStringArr:
+			parts = append(parts, fmt.Sprintf("char %s[][10005]", p))
+		default:
+			parts = append(parts, fmt.Sprintf("int %s", p))
+		}
+		if v.LengthVar != "" && isArrayType(v.Type) && !contains(sig.Params, v.LengthVar) {
+			parts = append(parts, fmt.Sprintf("int %s", v.LengthVar))
+		}
 	}
 	return strings.Join(parts, ", ")
 }

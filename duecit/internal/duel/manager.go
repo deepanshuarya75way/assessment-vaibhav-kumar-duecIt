@@ -299,6 +299,7 @@ func (m *Manager) SubmitCode(ctx context.Context, matchID, userID primitive.Obje
 		SolveTimeMs:     solveTimeMs + int64(penalty*1000),
 		PenaltySeconds:  penalty,
 		TestResults:     result.TestResults,
+		Verdict:         result.Verdict,
 		IsFinal:         match.Mode == models.ModePractice,
 		IsFullAC:        result.IsFullAC,
 		SubmittedAt:     time.Now(),

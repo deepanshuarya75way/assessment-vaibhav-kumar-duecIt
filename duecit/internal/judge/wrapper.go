@@ -35,7 +35,7 @@ func BuildExecutable(code, language string, driverCode map[string]string, spec [
 		// a reason to silently drop the submitted code. Append it below a
 		// comment so it's at least visible in Piston's stderr/stdout for
 		// debugging, rather than pretending the driver alone is a program.
-		return driver + "\n\n# WARNING: driver code is missing " + SolutionPlaceholder + " - submitted code appended below, may not compile/run correctly\n" + code
+		return driver + "\n\n" + commentPrefix(language) + " WARNING: driver code is missing " + SolutionPlaceholder + " - submitted code appended below, may not compile/run correctly\n" + code
 	}
 
 	if sig.FuncName != "" {
@@ -43,6 +43,15 @@ func BuildExecutable(code, language string, driverCode map[string]string, spec [
 	}
 
 	return code
+}
+
+func commentPrefix(language string) string {
+	switch language {
+	case "python":
+		return "#"
+	default:
+		return "//"
+	}
 }
 
 // WrapPracticeCode wraps a user's "logic-only" function in the stdin/stdout
@@ -65,6 +74,12 @@ func WrapPracticeCode(userCode string, language string, spec []models.InputVar, 
 		return wrapJS(userCode, spec, sig)
 	case "go":
 		return wrapGo(userCode, spec, sig)
+	case "java":
+		return wrapJava(userCode, spec, sig)
+	case "cpp":
+		return wrapCPP(userCode, spec, sig)
+	case "c":
+		return wrapC(userCode, spec, sig)
 	default:
 		return userCode
 	}
@@ -244,4 +259,247 @@ func main() {
 %s
 }
 `, strconvImport, userCode, reads.String(), sig.FuncName, callArgs, printResult)
+}
+
+func wrapJava(userCode string, spec []models.InputVar, sig models.FuncSignature) string {
+	var reads strings.Builder
+	for _, v := range spec {
+		switch v.Type {
+		case models.TypeInt:
+			fmt.Fprintf(&reads, "\t\tint %s = sc.nextInt();\n", v.Name)
+		case models.TypeFloat:
+			fmt.Fprintf(&reads, "\t\tdouble %s = sc.nextDouble();\n", v.Name)
+		case models.TypeBool:
+			fmt.Fprintf(&reads, "\t\tboolean %s = sc.nextBoolean();\n", v.Name)
+		case models.TypeString:
+			fmt.Fprintf(&reads, "\t\tString %s = sc.next();\n", v.Name)
+		case models.TypeIntArr:
+			length := lengthExpr(v)
+			fmt.Fprintf(&reads, "\t\tint[] %s = new int[%s];\n", v.Name, length)
+			fmt.Fprintf(&reads, "\t\tfor (int i = 0; i < %s; i++) %s[i] = sc.nextInt();\n", length, v.Name)
+		case models.TypeFloatArr:
+			length := lengthExpr(v)
+			fmt.Fprintf(&reads, "\t\tdouble[] %s = new double[%s];\n", v.Name, length)
+			fmt.Fprintf(&reads, "\t\tfor (int i = 0; i < %s; i++) %s[i] = sc.nextDouble();\n", length, v.Name)
+		case models.TypeStringArr:
+			length := lengthExpr(v)
+			fmt.Fprintf(&reads, "\t\tString[] %s = new String[%s];\n", v.Name, length)
+			fmt.Fprintf(&reads, "\t\tfor (int i = 0; i < %s; i++) %s[i] = sc.next();\n", length, v.Name)
+		}
+	}
+
+	printResult := "\t\tSystem.out.println(result);\n"
+	switch sig.ReturnType {
+	case models.TypeIntArr, models.TypeFloatArr, models.TypeStringArr:
+		printResult = "\t\tfor (int i = 0; i < result.length; i++) {\n\t\t\tif (i > 0) System.out.print(\" \");\n\t\t\tSystem.out.print(result[i]);\n\t\t}\n\t\tSystem.out.println();\n"
+	}
+
+	return fmt.Sprintf(`import java.util.*;
+
+public class Main {
+%s
+
+	public static void main(String[] args) {
+		Scanner sc = new Scanner(System.in);
+%s
+		%s result = %s(%s);
+%s	}
+}
+`, indent(userCode, "\t"), reads.String(), javaType(sig.ReturnType), sig.FuncName, strings.Join(sig.Params, ", "), printResult)
+}
+
+func wrapCPP(userCode string, spec []models.InputVar, sig models.FuncSignature) string {
+	var reads strings.Builder
+	for _, v := range spec {
+		switch v.Type {
+		case models.TypeInt:
+			fmt.Fprintf(&reads, "\tint %s; cin >> %s;\n", v.Name, v.Name)
+		case models.TypeFloat:
+			fmt.Fprintf(&reads, "\tdouble %s; cin >> %s;\n", v.Name, v.Name)
+		case models.TypeBool:
+			fmt.Fprintf(&reads, "\tbool %s; cin >> %s;\n", v.Name, v.Name)
+		case models.TypeString:
+			fmt.Fprintf(&reads, "\tstring %s; cin >> %s;\n", v.Name, v.Name)
+		case models.TypeIntArr:
+			length := lengthExpr(v)
+			fmt.Fprintf(&reads, "\tvector<int> %s(%s); for (int i = 0; i < %s; i++) cin >> %s[i];\n", v.Name, length, length, v.Name)
+		case models.TypeFloatArr:
+			length := lengthExpr(v)
+			fmt.Fprintf(&reads, "\tvector<double> %s(%s); for (int i = 0; i < %s; i++) cin >> %s[i];\n", v.Name, length, length, v.Name)
+		case models.TypeStringArr:
+			length := lengthExpr(v)
+			fmt.Fprintf(&reads, "\tvector<string> %s(%s); for (int i = 0; i < %s; i++) cin >> %s[i];\n", v.Name, length, length, v.Name)
+		}
+	}
+
+	printResult := "\tcout << result << '\\n';\n"
+	switch sig.ReturnType {
+	case models.TypeIntArr, models.TypeFloatArr, models.TypeStringArr:
+		printResult = "\tfor (size_t i = 0; i < result.size(); i++) {\n\t\tif (i) cout << ' ';\n\t\tcout << result[i];\n\t}\n\tcout << '\\n';\n"
+	}
+
+	return fmt.Sprintf(`#include <bits/stdc++.h>
+using namespace std;
+
+%s
+
+int main() {
+%s
+	auto result = %s(%s);
+%s	return 0;
+}
+`, userCode, reads.String(), sig.FuncName, strings.Join(sig.Params, ", "), printResult)
+}
+
+func wrapC(userCode string, spec []models.InputVar, sig models.FuncSignature) string {
+	var reads strings.Builder
+	for _, v := range spec {
+		switch v.Type {
+		case models.TypeInt:
+			fmt.Fprintf(&reads, "\tint %s; scanf(\"%%d\", &%s);\n", v.Name, v.Name)
+		case models.TypeFloat:
+			fmt.Fprintf(&reads, "\tdouble %s; scanf(\"%%lf\", &%s);\n", v.Name, v.Name)
+		case models.TypeBool:
+			fmt.Fprintf(&reads, "\tint %s; scanf(\"%%d\", &%s);\n", v.Name, v.Name)
+		case models.TypeString:
+			fmt.Fprintf(&reads, "\tchar %s[10005]; scanf(\"%%10004s\", %s);\n", v.Name, v.Name)
+		case models.TypeIntArr:
+			length := lengthExpr(v)
+			fmt.Fprintf(&reads, "\tint %s[%s]; for (int i = 0; i < %s; i++) scanf(\"%%d\", &%s[i]);\n", v.Name, length, length, v.Name)
+		case models.TypeFloatArr:
+			length := lengthExpr(v)
+			fmt.Fprintf(&reads, "\tdouble %s[%s]; for (int i = 0; i < %s; i++) scanf(\"%%lf\", &%s[i]);\n", v.Name, length, length, v.Name)
+		case models.TypeStringArr:
+			length := lengthExpr(v)
+			fmt.Fprintf(&reads, "\tchar %s[%s][10005]; for (int i = 0; i < %s; i++) scanf(\"%%10004s\", %s[i]);\n", v.Name, length, length, v.Name)
+		}
+	}
+
+	printResult := "\tprintf(\"%d\\n\", result);\n"
+	switch sig.ReturnType {
+	case models.TypeFloat:
+		printResult = "\tprintf(\"%g\\n\", result);\n"
+	case models.TypeBool:
+		printResult = "\tprintf(\"%d\\n\", result);\n"
+	case models.TypeString:
+		printResult = "\tprintf(\"%s\\n\", result);\n"
+	case models.TypeIntArr, models.TypeFloatArr, models.TypeStringArr:
+		printResult = "\t/* Array returns in C require a hand-written driverCode template. */\n"
+	}
+
+	return fmt.Sprintf(`#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+%s
+
+int main() {
+%s
+	%s result = %s(%s);
+%s	return 0;
+}
+`, userCode, reads.String(), cType(sig.ReturnType), sig.FuncName, cCallArgs(spec, sig), printResult)
+}
+
+func lengthExpr(v models.InputVar) string {
+	if v.LengthVar != "" {
+		return v.LengthVar
+	}
+	return "0"
+}
+
+func javaType(t models.ParamType) string {
+	switch t {
+	case models.TypeInt:
+		return "int"
+	case models.TypeFloat:
+		return "double"
+	case models.TypeBool:
+		return "boolean"
+	case models.TypeString:
+		return "String"
+	case models.TypeIntArr:
+		return "int[]"
+	case models.TypeFloatArr:
+		return "double[]"
+	case models.TypeStringArr:
+		return "String[]"
+	default:
+		return "Object"
+	}
+}
+
+func cppType(t models.ParamType) string {
+	switch t {
+	case models.TypeInt:
+		return "int"
+	case models.TypeFloat:
+		return "double"
+	case models.TypeBool:
+		return "bool"
+	case models.TypeString:
+		return "string"
+	case models.TypeIntArr:
+		return "vector<int>"
+	case models.TypeFloatArr:
+		return "vector<double>"
+	case models.TypeStringArr:
+		return "vector<string>"
+	default:
+		return "auto"
+	}
+}
+
+func cType(t models.ParamType) string {
+	switch t {
+	case models.TypeFloat:
+		return "double"
+	case models.TypeBool:
+		return "int"
+	case models.TypeString:
+		return "char*"
+	default:
+		return "int"
+	}
+}
+
+func cCallArgs(spec []models.InputVar, sig models.FuncSignature) string {
+	byName := map[string]models.InputVar{}
+	for _, v := range spec {
+		byName[v.Name] = v
+	}
+
+	args := make([]string, 0, len(sig.Params))
+	for _, p := range sig.Params {
+		args = append(args, p)
+		v, ok := byName[p]
+		if !ok || v.LengthVar == "" || !isArrayType(v.Type) || contains(sig.Params, v.LengthVar) {
+			continue
+		}
+		args = append(args, v.LengthVar)
+	}
+	return strings.Join(args, ", ")
+}
+
+func isArrayType(t models.ParamType) bool {
+	return t == models.TypeIntArr || t == models.TypeFloatArr || t == models.TypeStringArr
+}
+
+func contains(values []string, target string) bool {
+	for _, v := range values {
+		if v == target {
+			return true
+		}
+	}
+	return false
+}
+
+func indent(s, prefix string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			lines[i] = prefix + line
+		}
+	}
+	return strings.Join(lines, "\n")
 }

@@ -15,7 +15,7 @@ import AntiCapture from '@/components/AntiCapture';
 // Languages the function-wrapper actually supports (see judge/wrapper.go).
 // Keep in sync with backend WrapPracticeCode's switch cases - anything not
 // in this list runs as a raw full program regardless of match mode.
-const WRAPPER_SUPPORTED_LANGS = ['python', 'javascript', 'go'];
+const WRAPPER_SUPPORTED_LANGS = ['python', 'javascript', 'go', 'java', 'cpp', 'c'];
 
 interface Problem {
   id: string;
@@ -147,7 +147,7 @@ export default function DuelPage() {
   const [opponentProgress, setOpponentProgress] = useState('');
   const [results, setResults] = useState<Record<string, unknown> | null>(null);
   const [runDetails, setRunDetails] = useState<Array<{
-    passed: boolean; input: string; expected: string; actual: string; error?: string;
+    passed: boolean; verdict: string; input: string; expected: string; actual: string; error?: string; executionTime?: number;
   }> | null>(null);
 
   const loadStarterCode = useCallback((lang: string, problem?: Problem) => {
@@ -357,19 +357,21 @@ export default function DuelPage() {
     setRunDetails(null);
     try {
       const result = await api.runCode(matchId, code, language) as {
-        passedCount?: number; totalCount?: number;
-        testResults?: Array<{ passed: boolean; input: string; expectedOutput: string; actualOutput: string; error?: string }>;
+        passedCount?: number; totalCount?: number; verdict?: string;
+        testResults?: Array<{ passed: boolean; verdict?: string; input: string; expectedOutput: string; actualOutput: string; error?: string; executionTime?: number }>;
       };
       const passed = result.passedCount ?? 0;
-      const total = result.testResults?.length ?? 0;
-      setRunResult(`${passed}/${total} sample${total !== 1 ? 's' : ''} passed`);
+      const total = result.totalCount ?? result.testResults?.length ?? 0;
+      setRunResult(`${verdictLabel(result.verdict)} - ${passed}/${total} sample${total !== 1 ? 's' : ''} passed`);
       if (result.testResults) {
         setRunDetails(result.testResults.map(r => ({
           passed: r.passed,
-          input: r.input,
-          expected: r.expectedOutput,
-          actual: r.actualOutput,
+          verdict: r.verdict || (r.passed ? 'AC' : 'WA'),
+          input: r.input || '',
+          expected: r.expectedOutput || '',
+          actual: r.actualOutput || '',
           error: r.error,
+          executionTime: r.executionTime,
         })));
       }
     } catch (err) {
@@ -386,8 +388,9 @@ export default function DuelPage() {
         submission?: {
           passedCount?: number;
           totalCount?: number;
+          verdict?: string;
           isFullAC?: boolean;
-          testResults?: Array<{ passed: boolean; input: string; expectedOutput: string; actualOutput: string; error?: string }>;
+          testResults?: Array<{ passed: boolean; verdict?: string; input: string; expectedOutput: string; actualOutput: string; error?: string; executionTime?: number }>;
         };
       };
       prevCodeLen.current = getCodeLength(code);
@@ -397,17 +400,19 @@ export default function DuelPage() {
       if (sub?.testResults) {
         setRunDetails(sub.testResults.map(r => ({
           passed: r.passed,
-          input: r.input,
-          expected: r.expectedOutput,
-          actual: r.actualOutput,
+          verdict: r.verdict || (r.passed ? 'AC' : 'WA'),
+          input: r.input || '',
+          expected: r.expectedOutput || '',
+          actual: r.actualOutput || '',
           error: r.error,
+          executionTime: r.executionTime,
         })));
       }
       const passed = sub?.passedCount ?? 0;
       const total = sub?.totalCount ?? sub?.testResults?.length ?? 0;
       setRunResult(
         total > 0
-          ? `Submitted — ${passed}/${total} test cases passed. Waiting for opponent or timeout...`
+          ? `Submitted - ${verdictLabel(sub?.verdict)} - ${passed}/${total} test cases passed. Waiting for opponent or timeout...`
           : 'Submitted — waiting for opponent or timeout...'
       );
 
@@ -594,7 +599,11 @@ export default function DuelPage() {
                         tc.passed ? 'bg-green-900/40 text-green-300' : 'bg-red-900/40 text-red-300'
                       }`}
                     >
-                      <span className="font-bold mr-2">{tc.passed ? '✓' : '✗'} Case {i + 1}</span>
+                      <span className="font-bold mr-2">{tc.passed ? 'OK' : 'FAIL'} Case {i + 1}</span>
+                      <span className="font-bold mr-2">{verdictLabel(tc.verdict)}</span>
+                      {typeof tc.executionTime === 'number' && (
+                        <span className="text-zinc-400 mr-2">{tc.executionTime}ms</span>
+                      )}
                       {!tc.passed && (
                         <span className="text-zinc-400">
                           in: <span className="text-white">{(tc.input || '').slice(0, 40)}</span>
@@ -612,6 +621,27 @@ export default function DuelPage() {
       </div>
     </AntiCapture>
   );
+}
+
+function verdictLabel(verdict?: string) {
+  switch (verdict) {
+    case 'AC':
+      return 'Accepted';
+    case 'WA':
+      return 'Wrong Answer';
+    case 'CE':
+      return 'Compilation Error';
+    case 'RE':
+      return 'Runtime Error';
+    case 'TLE':
+      return 'Time Limit Exceeded';
+    case 'UNSUPPORTED_LANGUAGE':
+      return 'Unsupported Language';
+    case 'ENGINE_ERROR':
+      return 'Judge Error';
+    default:
+      return 'Result';
+  }
 }
 
 function ResultsView({

@@ -121,7 +121,7 @@ func (m *Manager) CreateMatch(ctx context.Context, in CreateMatchInput) (*models
 	m.hub.JoinMatchRoom(in.PlayerA.Hex(), matchID)
 	m.hub.JoinMatchRoom(in.PlayerB.Hex(), matchID)
 
-	pub := in.Problem.ToPublic()
+	pub := m.problemPublicWithSamples(ctx, in.Problem)
 	serverTime := now.UnixMilli()
 
 	payloadA := MatchFoundPayload{
@@ -222,6 +222,12 @@ func (m *Manager) RunCode(ctx context.Context, matchID, userID primitive.ObjectI
 	checker := judge.CheckerForProblem(problem)
 
 	testCases := judge.SamplesToTestCases(problem.Samples)
+	if len(testCases) == 0 {
+		testCases = m.visibleTestCases(ctx, match.ProblemID)
+	}
+	if len(testCases) == 0 {
+		return nil, fmt.Errorf("no sample test cases configured for this problem")
+	}
 	return m.judge.Evaluate(ctx, execCode, language, testCases, checker)
 }
 
@@ -664,7 +670,7 @@ func (m *Manager) GetMatchDetails(ctx context.Context, matchID, userID primitive
 	return &MatchDetails{
 		MatchID:        match.ID.Hex(),
 		YourRole:       role,
-		Problem:        problem.ToPublic(),
+		Problem:        m.problemPublicWithSamples(ctx, problem),
 		Opponent:       OpponentInfo{UserID: opponent.ID.Hex(), Username: opponent.Username, Rating: rating},
 		Mode:           match.Mode,
 		Language:       match.Language,
@@ -734,7 +740,7 @@ func (m *Manager) buildMatchFoundPayload(ctx context.Context, match *models.Matc
 	return &MatchFoundPayload{
 		MatchID:        match.ID.Hex(),
 		YourRole:       role,
-		Problem:        problem.ToPublic(),
+		Problem:        m.problemPublicWithSamples(ctx, problem),
 		Opponent:       OpponentInfo{UserID: opponent.ID.Hex(), Username: opponent.Username, Rating: rating},
 		Mode:           match.Mode,
 		Language:       match.Language,
@@ -744,6 +750,34 @@ func (m *Manager) buildMatchFoundPayload(ctx context.Context, match *models.Matc
 		ReadPhaseSec:   match.ReadPhaseSec,
 		CodingPhaseSec: match.CodingPhaseSec,
 	}, nil
+}
+
+func (m *Manager) problemPublicWithSamples(ctx context.Context, problem *models.Problem) models.ProblemPublic {
+	pub := problem.ToPublic()
+	if len(pub.Samples) > 0 {
+		return pub
+	}
+	for _, tc := range m.visibleTestCases(ctx, problem.ProblemID) {
+		pub.Samples = append(pub.Samples, models.Sample{
+			Input:  tc.Input,
+			Output: tc.ExpectedOutput,
+		})
+	}
+	return pub
+}
+
+func (m *Manager) visibleTestCases(ctx context.Context, problemID string) []models.TestCase {
+	testCases, err := m.problems.GetTestCases(ctx, problemID, false)
+	if err != nil {
+		return nil
+	}
+	visible := make([]models.TestCase, 0, len(testCases))
+	for _, tc := range testCases {
+		if !tc.IsHidden {
+			visible = append(visible, tc)
+		}
+	}
+	return visible
 }
 
 func (m *Manager) OnUserConnected(userID primitive.ObjectID) {

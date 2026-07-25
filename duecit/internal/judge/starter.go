@@ -109,15 +109,15 @@ func cParamList(spec []models.InputVar, sig models.FuncSignature) string {
 		case models.TypeFloat:
 			parts = append(parts, fmt.Sprintf("double %s", p))
 		case models.TypeBool:
-			parts = append(parts, fmt.Sprintf("int %s", p))
+			parts = append(parts, fmt.Sprintf("bool %s", p))
 		case models.TypeString:
 			parts = append(parts, fmt.Sprintf("char* %s", p))
 		case models.TypeIntArr:
-			parts = append(parts, fmt.Sprintf("int %s[]", p))
+			parts = append(parts, fmt.Sprintf("int* %s", p))
 		case models.TypeFloatArr:
-			parts = append(parts, fmt.Sprintf("double %s[]", p))
+			parts = append(parts, fmt.Sprintf("double* %s", p))
 		case models.TypeStringArr:
-			parts = append(parts, fmt.Sprintf("char %s[][10005]", p))
+			parts = append(parts, fmt.Sprintf("char** %s", p))
 		default:
 			parts = append(parts, fmt.Sprintf("int %s", p))
 		}

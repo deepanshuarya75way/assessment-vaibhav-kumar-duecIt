@@ -192,6 +192,38 @@ int main() {
 	}
 }
 
+func TestWrapPracticeCodeSupportsCArrayReturn(t *testing.T) {
+	code := `int* twoSum(int* nums, int numsSize, int target, int* returnSize) {
+    *returnSize = 2;
+    int* ans = malloc(sizeof(int) * 2);
+    ans[0] = 0;
+    ans[1] = 1;
+    return ans;
+}`
+	spec := []models.InputVar{
+		{Name: "n", Type: models.TypeInt},
+		{Name: "nums", Type: models.TypeIntArr, LengthVar: "n"},
+		{Name: "target", Type: models.TypeInt},
+	}
+	sig := models.FuncSignature{
+		FuncName:   "twoSum",
+		Params:     []string{"nums", "target"},
+		ReturnType: models.TypeIntArr,
+	}
+
+	execCode := WrapPracticeCode(code, "c", spec, sig)
+	for _, want := range []string{
+		"#include <stdbool.h>",
+		"int returnSize = 0;",
+		"twoSum(nums, n, target, &returnSize)",
+		"for (int i = 0; i < returnSize; i++)",
+	} {
+		if !strings.Contains(execCode, want) {
+			t.Fatalf("generated C wrapper missing %q:\n%s", want, execCode)
+		}
+	}
+}
+
 func newTestService(t *testing.T, handler func(*http.Request) pistonResponse) *Service {
 	t.Helper()
 	svc := NewService(&config.Config{PistonURL: "http://piston.test"})

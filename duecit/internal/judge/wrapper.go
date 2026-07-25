@@ -387,30 +387,39 @@ func wrapC(userCode string, spec []models.InputVar, sig models.FuncSignature) st
 		}
 	}
 
+	resultDecl := fmt.Sprintf("\t%s result = %s(%s);\n", cType(sig.ReturnType), sig.FuncName, cCallArgs(spec, sig))
 	printResult := "\tprintf(\"%d\\n\", result);\n"
 	switch sig.ReturnType {
 	case models.TypeFloat:
 		printResult = "\tprintf(\"%g\\n\", result);\n"
 	case models.TypeBool:
-		printResult = "\tprintf(\"%d\\n\", result);\n"
+		printResult = "\tprintf(result ? \"true\\n\" : \"false\\n\");\n"
 	case models.TypeString:
 		printResult = "\tprintf(\"%s\\n\", result);\n"
-	case models.TypeIntArr, models.TypeFloatArr, models.TypeStringArr:
-		printResult = "\t/* Array returns in C require a hand-written driverCode template. */\n"
+	case models.TypeIntArr:
+		resultDecl = fmt.Sprintf("\tint returnSize = 0;\n\t%s result = %s(%s);\n", cType(sig.ReturnType), sig.FuncName, cCallArgs(spec, sig))
+		printResult = "\tfor (int i = 0; i < returnSize; i++) { if (i) printf(\" \"); printf(\"%d\", result[i]); }\n\tprintf(\"\\n\");\n"
+	case models.TypeFloatArr:
+		resultDecl = fmt.Sprintf("\tint returnSize = 0;\n\t%s result = %s(%s);\n", cType(sig.ReturnType), sig.FuncName, cCallArgs(spec, sig))
+		printResult = "\tfor (int i = 0; i < returnSize; i++) { if (i) printf(\" \"); printf(\"%g\", result[i]); }\n\tprintf(\"\\n\");\n"
+	case models.TypeStringArr:
+		resultDecl = fmt.Sprintf("\tint returnSize = 0;\n\t%s result = %s(%s);\n", cType(sig.ReturnType), sig.FuncName, cCallArgs(spec, sig))
+		printResult = "\tfor (int i = 0; i < returnSize; i++) { if (i) printf(\" \"); printf(\"%s\", result[i]); }\n\tprintf(\"\\n\");\n"
 	}
 
 	return fmt.Sprintf(`#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 %s
 
 int main() {
 %s
-	%s result = %s(%s);
+%s
 %s	return 0;
 }
-`, userCode, reads.String(), cType(sig.ReturnType), sig.FuncName, cCallArgs(spec, sig), printResult)
+`, userCode, reads.String(), resultDecl, printResult)
 }
 
 func lengthExpr(v models.InputVar) string {
@@ -467,9 +476,15 @@ func cType(t models.ParamType) string {
 	case models.TypeFloat:
 		return "double"
 	case models.TypeBool:
-		return "int"
+		return "bool"
 	case models.TypeString:
 		return "char*"
+	case models.TypeIntArr:
+		return "int*"
+	case models.TypeFloatArr:
+		return "double*"
+	case models.TypeStringArr:
+		return "char**"
 	default:
 		return "int"
 	}
@@ -489,6 +504,9 @@ func cCallArgs(spec []models.InputVar, sig models.FuncSignature) string {
 			continue
 		}
 		args = append(args, v.LengthVar)
+	}
+	if isArrayType(sig.ReturnType) {
+		args = append(args, "&returnSize")
 	}
 	return strings.Join(args, ", ")
 }

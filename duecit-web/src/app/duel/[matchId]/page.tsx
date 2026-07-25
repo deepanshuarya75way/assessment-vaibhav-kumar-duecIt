@@ -11,6 +11,7 @@ import ProblemPanel from '@/components/ProblemPanel';
 import DuelEditor, { getCodeLength } from '@/components/DuelEditor';
 import MatchTimer from '@/components/MatchTimer';
 import AntiCapture from '@/components/AntiCapture';
+import TestResultsPanel, { type TestCaseResult } from '@/components/TestResultsPanel';
 
 // Languages the function-wrapper actually supports (see judge/wrapper.go).
 // Keep in sync with backend WrapPracticeCode's switch cases - anything not
@@ -298,13 +299,18 @@ export default function DuelPage() {
   const matchInitialized = useRef(false);
   const [runResult, setRunResult] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [running, setRunning] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submittedWaiting, setSubmittedWaiting] = useState(false);
   const [tabWarnings, setTabWarnings] = useState(0);
   const [opponentProgress, setOpponentProgress] = useState('');
   const [results, setResults] = useState<Record<string, unknown> | null>(null);
-  const [runDetails, setRunDetails] = useState<Array<{
-    passed: boolean; verdict: string; input: string; expected: string; actual: string; error?: string; executionTime?: number;
-  }> | null>(null);
+  const [runDetails, setRunDetails] = useState<TestCaseResult[] | null>(null);
+  const [runVerdict, setRunVerdict] = useState<string | undefined>(undefined);
+  const [runPassedCount, setRunPassedCount] = useState<number | undefined>(undefined);
+  const [runTotalCount, setRunTotalCount] = useState<number | undefined>(undefined);
+  const [resultsPanelMode, setResultsPanelMode] = useState<'idle' | 'run' | 'submit'>('idle');
+  const [resultsPanelOpen, setResultsPanelOpen] = useState(false);
 
   const loadStarterCode = useCallback((lang: string, problem?: Problem) => {
     const ioMode = computeIoMode(problem, lang);
@@ -517,8 +523,14 @@ export default function DuelPage() {
 
   const handleRun = async () => {
     if (!match) return;
-    setRunResult('Running...');
+    setRunning(true);
     setRunDetails(null);
+    setRunVerdict(undefined);
+    setRunPassedCount(undefined);
+    setRunTotalCount(undefined);
+    setResultsPanelMode('run');
+    setResultsPanelOpen(true);
+    setSubmittedWaiting(false);
     try {
       const result = await api.runCode(matchId, code, language) as {
         passedCount?: number; totalCount?: number; verdict?: string;
@@ -526,6 +538,9 @@ export default function DuelPage() {
       };
       const passed = result.passedCount ?? 0;
       const total = result.totalCount ?? result.testResults?.length ?? 0;
+      setRunVerdict(result.verdict);
+      setRunPassedCount(passed);
+      setRunTotalCount(total);
       setRunResult(`${verdictLabel(result.verdict)} - ${passed}/${total} sample${total !== 1 ? 's' : ''} passed`);
       if (result.testResults) {
         setRunDetails(result.testResults.map(r => ({
@@ -540,12 +555,22 @@ export default function DuelPage() {
       }
     } catch (err) {
       setRunResult(err instanceof Error ? err.message : 'Run failed');
+      setRunVerdict('ENGINE_ERROR');
+    } finally {
+      setRunning(false);
     }
   };
 
   const handleSubmit = async () => {
     if (!match || submitting || submitted) return;
     setSubmitting(true);
+    setResultsPanelMode('submit');
+    setResultsPanelOpen(true);
+    setSubmittedWaiting(false);
+    setRunDetails(null);
+    setRunVerdict(undefined);
+    setRunPassedCount(undefined);
+    setRunTotalCount(undefined);
     try {
       const result = await api.submitCode(matchId, code, language, prevCodeLen.current) as {
         matchFinished: boolean;
@@ -574,18 +599,25 @@ export default function DuelPage() {
       }
       const passed = sub?.passedCount ?? 0;
       const total = sub?.totalCount ?? sub?.testResults?.length ?? 0;
+      setRunVerdict(sub?.verdict);
+      setRunPassedCount(passed);
+      setRunTotalCount(total);
       setRunResult(
         total > 0
-          ? `Submitted - ${verdictLabel(sub?.verdict)} - ${passed}/${total} test cases passed. Waiting for opponent or timeout...`
-          : 'Submitted — waiting for opponent or timeout...'
+          ? `Submitted - ${verdictLabel(sub?.verdict)} - ${passed}/${total} test cases passed`
+          : 'Submitted'
       );
 
       if (result.matchFinished) {
         setRunResult('Match completed. Loading results...');
+        setSubmittedWaiting(false);
         await fetchMatchResult();
+      } else {
+        setSubmittedWaiting(true);
       }
     } catch (err) {
       setRunResult(err instanceof Error ? err.message : 'Submit failed');
+      setRunVerdict('ENGINE_ERROR');
     } finally {
       setSubmitting(false);
     }
@@ -728,7 +760,11 @@ export default function DuelPage() {
             />
           </div>
           <div className="flex flex-col min-h-0 bg-[var(--editor-bg)]">
-            <div className="flex-1 min-h-0 p-1">
+            {/* Editor fills remaining space, results panel below */}
+            <div
+              className="min-h-0 flex-1"
+              style={{ height: resultsPanelOpen ? 'calc(100% - 220px)' : 'calc(100% - 44px)' }}
+            >
               <DuelEditor
                 language={language}
                 onLanguageChange={handleLanguageChange}
@@ -742,50 +778,52 @@ export default function DuelPage() {
                 solutionSignature={solutionSignature}
               />
             </div>
-            {/* Bottom action bar + test results */}
-            <div className="flex flex-col bg-[#2d2d2d] border-t border-zinc-700 max-h-48 overflow-y-auto">
-              <div className="flex items-center gap-2 px-3 py-2 shrink-0">
-                <button
-                  onClick={handleRun}
-                  disabled={editorLocked}
-                  className="cf-btn-secondary text-xs px-3 py-1 disabled:opacity-40"
-                >
-                  Run Samples
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={editorLocked || submitting || submitted}
-                  className="cf-btn text-xs px-4 py-1 disabled:opacity-40"
-                >
-                  {submitting ? 'Submitting...' : submitted ? 'Submitted' : 'Submit'}
-                </button>
-                {runResult && <span className="text-zinc-400 text-xs ml-2">{runResult}</span>}
+
+            {/* Results panel (expandable) */}
+            {resultsPanelOpen && (
+              <div style={{ height: '220px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <TestResultsPanel
+                  verdict={runVerdict}
+                  passedCount={runPassedCount}
+                  totalCount={runTotalCount}
+                  testResults={runDetails || undefined}
+                  isRunning={running}
+                  isSubmitting={submitting}
+                  mode={resultsPanelMode}
+                  submittedWaiting={submittedWaiting}
+                />
               </div>
-              {/* Per-test-case results */}
-              {runDetails && (
-                <div className="px-3 pb-2 flex flex-col gap-1">
-                  {runDetails.map((tc, i) => (
-                    <div
-                      key={i}
-                      className={`text-xs rounded px-2 py-1 font-mono ${
-                        tc.passed ? 'bg-green-900/40 text-green-300' : 'bg-red-900/40 text-red-300'
-                      }`}
-                    >
-                      <span className="font-bold mr-2">{tc.passed ? 'OK' : 'FAIL'} Case {i + 1}</span>
-                      <span className="font-bold mr-2">{verdictLabel(tc.verdict)}</span>
-                      {typeof tc.executionTime === 'number' && (
-                        <span className="text-zinc-400 mr-2">{tc.executionTime}ms</span>
-                      )}
-                      {!tc.passed && (
-                        <span className="text-zinc-400">
-                          in: <span className="text-white">{(tc.input || '').slice(0, 40)}</span>
-                          {' | '}expected: <span className="text-green-300">{(tc.expected || '').slice(0, 40)}</span>
-                          {' | '}got: <span className="text-red-300">{(tc.actual || tc.error || '(empty)').slice(0, 60)}</span>
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+            )}
+
+            {/* Action bar */}
+            <div className="action-bar">
+              <button
+                onClick={handleRun}
+                disabled={editorLocked || running || submitting}
+                className="run-btn"
+                id="run-samples-btn"
+              >
+                ▶ Run Samples
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={editorLocked || submitting || submitted}
+                className={`submit-btn ${submitted ? 'submit-btn-done' : ''}`}
+                id="submit-code-btn"
+              >
+                {submitting ? '⏳ Submitting…' : submitted ? '✓ Submitted' : '⚡ Submit'}
+              </button>
+              {runResult && (
+                <span className="action-status" title={runResult}>{runResult}</span>
+              )}
+              {/* Toggle results panel */}
+              {(resultsPanelMode !== 'idle') && (
+                <button
+                  onClick={() => setResultsPanelOpen(o => !o)}
+                  style={{ marginLeft: 'auto', fontSize: '11px', color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  {resultsPanelOpen ? '▼ Hide' : '▲ Results'}
+                </button>
               )}
             </div>
           </div>
@@ -823,78 +861,132 @@ function ResultsView({
   results: Record<string, unknown>;
   onBack: () => void;
 }) {
+  const [showWinnerCode, setShowWinnerCode] = useState(false);
+  const [showLoserCode, setShowLoserCode] = useState(false);
+
   const isDraw = results.draw as boolean;
   const winner = results.winner as Record<string, unknown> | undefined;
   const loser = results.loser as Record<string, unknown> | undefined;
 
+  const winnerRatingChange = (winner?.ratingChange as number) ?? 0;
+  const loserRatingChange = (loser?.ratingChange as number) ?? 0;
+  const isRated = winnerRatingChange !== 0 || loserRatingChange !== 0;
+
   return (
-    <main className="max-w-4xl mx-auto p-4">
-      <div className="cf-panel p-6 mb-4 text-center">
-        <h1 className="text-2xl font-bold mb-2">
-          {isDraw ? (
-            <span className="text-[var(--cf-orange)]">Draw</span>
-          ) : (
-            <>
-              <span className="text-[var(--cf-green)]">{winner?.username as string}</span> wins!
-            </>
-          )}
-        </h1>
-      </div>
+    <div className="min-h-screen bg-[var(--cf-bg)]">
+      <div className="max-w-3xl mx-auto p-4 pt-6">
 
-      {!isDraw && winner && loser && (
-        <table className="cf-table mb-4">
-          <thead>
-            <tr>
-              <th>Player</th>
-              <th>Score</th>
-              <th>Time</th>
-              <th>Rating Δ</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="font-bold text-[var(--cf-green)]">{winner.username as string}</td>
-              <td>{Math.round(winner.score as number)}</td>
-              <td>{Math.round((winner.solveTimeMs as number) / 1000)}s</td>
-              <td className="text-[var(--cf-green)]">
-                +{winner.ratingChange as number} → {winner.newRating as number}
-              </td>
-            </tr>
-            <tr>
-              <td>{loser.username as string}</td>
-              <td>{Math.round(loser.score as number)}</td>
-              <td>{Math.round((loser.solveTimeMs as number) / 1000)}s</td>
-              <td className="text-red-600">
-                {loser.ratingChange as number} → {loser.newRating as number}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      )}
-
-      {winner && Boolean(winner.code) && (
-        <div className="cf-panel p-4 mb-4">
-          <h2 className="font-bold mb-2">
-            Winner&apos;s solution ({winner.language as string})
-          </h2>
-          <pre className="bg-[#f8f8f8] border border-[#ddd] p-3 overflow-x-auto text-xs font-mono">
-            {winner.code as string}
-          </pre>
+        {/* Outcome card */}
+        <div className={`rounded-lg p-6 mb-5 text-center shadow-sm ${
+          isDraw
+            ? 'bg-amber-50 border border-amber-200'
+            : 'bg-gradient-to-br from-[#336699]/5 to-[#336699]/10 border border-[#336699]/20'
+        }`}>
+          <div className="text-4xl mb-2">{isDraw ? '🤝' : '🏆'}</div>
+          <h1 className="text-2xl font-bold mb-1">
+            {isDraw ? (
+              <span className="text-amber-600">Draw!</span>
+            ) : (
+              <>
+                <span className="text-[var(--cf-blue)]">{winner?.username as string}</span>{' '}
+                <span className="text-gray-700">wins!</span>
+              </>
+            )}
+          </h1>
+          <p className="text-sm text-gray-500">
+            {isDraw ? 'Both players performed equally.' : 'Match completed.'}
+            {isRated ? '' : ' (Unrated match)'}
+          </p>
         </div>
-      )}
 
-      {loser && Boolean(loser.code) && (
-        <div className="cf-panel p-4 mb-4">
-          <h2 className="font-bold mb-2">{loser.username as string}&apos;s solution</h2>
-          <pre className="bg-[#f8f8f8] border border-[#ddd] p-3 overflow-x-auto text-xs font-mono">
-            {loser.code as string}
-          </pre>
+        {/* Player comparison */}
+        {winner && loser && (
+          <div className="cf-panel mb-5 overflow-hidden rounded-lg shadow-sm">
+            <div className="grid grid-cols-3 text-center text-xs font-bold uppercase tracking-wide text-gray-500 bg-gray-50 border-b border-gray-200 py-2">
+              <div>Player</div>
+              <div>Score / Time</div>
+              <div>Rating</div>
+            </div>
+            <div className={`grid grid-cols-3 items-center py-4 px-4 ${!isDraw ? 'bg-green-50 border-l-4 border-green-500' : ''}`}>
+              <div>
+                <div className="font-bold text-sm">{!isDraw && <span className="text-green-500 mr-1">👑</span>}{winner.username as string}</div>
+                <div className="text-xs text-gray-500">{isDraw ? 'Player' : 'Winner'}</div>
+              </div>
+              <div className="text-center">
+                <div className="font-bold">{Math.round(winner.score as number)}<span className="text-xs text-gray-400 font-normal"> pts</span></div>
+                <div className="text-xs text-gray-500">{Math.round((winner.solveTimeMs as number) / 1000)}s</div>
+              </div>
+              <div className="text-center">
+                {isRated ? (
+                  <>
+                    <div className="font-bold text-green-600">{winnerRatingChange >= 0 ? '+' : ''}{winnerRatingChange}</div>
+                    <div className="text-xs text-gray-500">→ {winner.newRating as number}</div>
+                  </>
+                ) : (
+                  <div className="text-xs text-gray-400">{winner.newRating as number}</div>
+                )}
+              </div>
+            </div>
+            <div className="border-t border-gray-200" />
+            <div className="grid grid-cols-3 items-center py-4 px-4 bg-white">
+              <div>
+                <div className="font-bold text-sm">{loser.username as string}</div>
+                <div className="text-xs text-gray-500">{isDraw ? 'Player' : 'Runner-up'}</div>
+              </div>
+              <div className="text-center">
+                <div className="font-bold">{Math.round(loser.score as number)}<span className="text-xs text-gray-400 font-normal"> pts</span></div>
+                <div className="text-xs text-gray-500">{Math.round((loser.solveTimeMs as number) / 1000)}s</div>
+              </div>
+              <div className="text-center">
+                {isRated ? (
+                  <>
+                    <div className="font-bold text-red-600">{loserRatingChange >= 0 ? '+' : ''}{loserRatingChange}</div>
+                    <div className="text-xs text-gray-500">→ {loser.newRating as number}</div>
+                  </>
+                ) : (
+                  <div className="text-xs text-gray-400">{loser.newRating as number}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Solutions */}
+        {winner && Boolean(winner.code) && (
+          <div className="cf-panel mb-4 rounded-lg shadow-sm overflow-hidden">
+            <button onClick={() => setShowWinnerCode(o => !o)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold hover:bg-gray-50 transition-colors">
+              <span>{winner.username as string}&apos;s Solution ({winner.language as string})</span>
+              <span className="text-gray-400">{showWinnerCode ? '▼' : '▶'}</span>
+            </button>
+            {showWinnerCode && (
+              <pre className="bg-[#1e1e1e] text-[#d4d4d4] p-4 overflow-x-auto text-xs font-mono border-t border-gray-200 leading-relaxed">
+                {winner.code as string}
+              </pre>
+            )}
+          </div>
+        )}
+
+        {loser && Boolean(loser.code) && (
+          <div className="cf-panel mb-4 rounded-lg shadow-sm overflow-hidden">
+            <button onClick={() => setShowLoserCode(o => !o)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold hover:bg-gray-50 transition-colors">
+              <span>{loser.username as string}&apos;s Solution ({loser.language as string})</span>
+              <span className="text-gray-400">{showLoserCode ? '▼' : '▶'}</span>
+            </button>
+            {showLoserCode && (
+              <pre className="bg-[#1e1e1e] text-[#d4d4d4] p-4 overflow-x-auto text-xs font-mono border-t border-gray-200 leading-relaxed">
+                {loser.code as string}
+              </pre>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-center mt-6">
+          <button onClick={onBack} className="cf-btn px-8 py-2 rounded">Back to Dashboard</button>
         </div>
-      )}
-
-      <div className="text-center">
-        <button onClick={onBack} className="cf-btn px-6 py-2">Back to Dashboard</button>
       </div>
-    </main>
+    </div>
   );
 }
+

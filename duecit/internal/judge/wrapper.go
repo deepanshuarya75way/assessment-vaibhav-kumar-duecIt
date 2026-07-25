@@ -29,7 +29,7 @@ const SolutionPlaceholder = "##SOLUTION##"
 func BuildExecutable(code, language string, driverCode map[string]string, spec []models.InputVar, sig models.FuncSignature) string {
 	if driver, ok := driverCode[language]; ok && driver != "" {
 		if strings.Contains(driver, SolutionPlaceholder) {
-			return strings.Replace(driver, SolutionPlaceholder, code, 1)
+			return applyDriverCode(driver, code, language)
 		}
 		// Driver configured but missing the placeholder - admin error, not
 		// a reason to silently drop the submitted code. Append it below a
@@ -43,6 +43,18 @@ func BuildExecutable(code, language string, driverCode map[string]string, spec [
 	}
 
 	return code
+}
+
+func applyDriverCode(driver, code, language string) string {
+	if language == "java" {
+		mainIdx := strings.Index(driver, "public class Main")
+		placeholderIdx := strings.Index(driver, SolutionPlaceholder)
+		if mainIdx >= 0 && placeholderIdx >= 0 && placeholderIdx < mainIdx {
+			withoutPlaceholder := strings.Replace(driver, SolutionPlaceholder, "", 1)
+			return strings.TrimSpace(withoutPlaceholder) + "\n\n" + strings.TrimSpace(code) + "\n"
+		}
+	}
+	return strings.Replace(driver, SolutionPlaceholder, code, 1)
 }
 
 func commentPrefix(language string) string {

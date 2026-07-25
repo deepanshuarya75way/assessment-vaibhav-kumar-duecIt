@@ -137,6 +137,61 @@ func TestEvaluateUsesJavaSourceFilename(t *testing.T) {
 	}
 }
 
+func TestBuildExecutableKeepsJavaMainBeforeSolution(t *testing.T) {
+	driver := `import java.util.*;
+
+##SOLUTION##
+
+public class Main {
+    public static void main(String[] args) {
+        System.out.println(Solution.missingNumber(new int[]{3, 0, 1}));
+    }
+}
+`
+	code := `class Solution {
+    public static int missingNumber(int[] nums) {
+        return 2;
+    }
+}`
+
+	execCode := BuildExecutable(code, "java", map[string]string{"java": driver}, nil, models.FuncSignature{})
+	mainIdx := strings.Index(execCode, "public class Main")
+	solutionIdx := strings.Index(execCode, "class Solution")
+	if mainIdx < 0 || solutionIdx < 0 {
+		t.Fatalf("generated code missing Main or Solution:\n%s", execCode)
+	}
+	if mainIdx > solutionIdx {
+		t.Fatalf("Main must appear before Solution so Piston runs Main:\n%s", execCode)
+	}
+	if strings.Contains(execCode, SolutionPlaceholder) {
+		t.Fatalf("placeholder was not removed:\n%s", execCode)
+	}
+}
+
+func TestBuildExecutableUsesCppHiddenDriver(t *testing.T) {
+	driver := `#include <bits/stdc++.h>
+using namespace std;
+
+##SOLUTION##
+
+int main() {
+    vector<int> nums{3, 0, 1};
+    cout << missingNumber(nums) << endl;
+    return 0;
+}
+`
+	code := `int missingNumber(const vector<int>& nums) {
+    return 2;
+}`
+
+	execCode := BuildExecutable(code, "cpp", map[string]string{"cpp": driver}, nil, models.FuncSignature{})
+	for _, want := range []string{"#include <bits/stdc++.h>", "int main()", "int missingNumber"} {
+		if !strings.Contains(execCode, want) {
+			t.Fatalf("generated C++ driver missing %q:\n%s", want, execCode)
+		}
+	}
+}
+
 func newTestService(t *testing.T, handler func(*http.Request) pistonResponse) *Service {
 	t.Helper()
 	svc := NewService(&config.Config{PistonURL: "http://piston.test"})

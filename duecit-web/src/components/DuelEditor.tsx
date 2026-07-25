@@ -17,8 +17,8 @@ const Editor = dynamic(() => import('@monaco-editor/react'), {
 export const LANGUAGES = [
   { id: 'python', label: 'Python 3' },
   // { id: 'javascript', label: 'JavaScript' },
-  // { id: 'cpp', label: 'C++17' },
-  // { id: 'java', label: 'Java' },
+  { id: 'cpp', label: 'C++17' },
+  { id: 'java', label: 'Java' },
   // { id: 'go', label: 'Go' },
   // { id: 'c', label: 'C' },
 ] as const;

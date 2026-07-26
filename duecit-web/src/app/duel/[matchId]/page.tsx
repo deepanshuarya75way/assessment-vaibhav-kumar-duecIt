@@ -3,28 +3,25 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Swords, Trophy, RotateCcw, ChevronUp, ChevronDown, Share2, AlertTriangle, Check } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
 import { wsClient } from '@/lib/ws';
-import AppNav, { ratingClass } from '@/components/AppNav';
+import { ratingClass } from '@/components/AppNav';
 import ProblemPanel from '@/components/ProblemPanel';
 import DuelEditor, { getCodeLength } from '@/components/DuelEditor';
 import MatchTimer from '@/components/MatchTimer';
 import AntiCapture from '@/components/AntiCapture';
 import TestResultsPanel, { type TestCaseResult } from '@/components/TestResultsPanel';
 
-// Languages the function-wrapper actually supports (see judge/wrapper.go).
-// Keep in sync with backend WrapPracticeCode's switch cases - anything not
-// in this list runs as a raw full program regardless of match mode.
+/* ─── All original logic — unchanged ───────────────────────────────── */
+
 const WRAPPER_SUPPORTED_LANGS = ['python', 'javascript', 'go', 'java', 'cpp', 'c'];
 
 interface Problem {
-  id: string;
-  title: string;
-  statement: string;
-  inputFormat: string;
-  outputFormat: string;
-  constraints: string;
+  id: string; title: string; statement: string;
+  inputFormat: string; outputFormat: string; constraints: string;
   difficulty?: string;
   samples: { input: string; output: string }[];
   starterCode?: Record<string, string>;
@@ -33,17 +30,11 @@ interface Problem {
   driverLanguages?: string[];
 }
 
-interface InputVar {
-  name: string;
-  type: string;
-  lengthVar?: string;
-  passToFunc?: boolean;
-}
+interface InputVar { name: string; type: string; lengthVar?: string; passToFunc?: boolean; }
 
 function toStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 }
-
 function toNumber(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -51,46 +42,23 @@ function toNumber(value: unknown): number {
 
 function normalizeProblem(value: unknown): Problem {
   const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  const signatureRaw = raw.signature && typeof raw.signature === 'object'
-    ? raw.signature as Record<string, unknown>
-    : null;
-  const signature = signatureRaw
-    ? {
-        funcName: typeof signatureRaw.funcName === 'string' ? signatureRaw.funcName : '',
-        params: toStringArray(signatureRaw.params),
-        returnType: typeof signatureRaw.returnType === 'string' ? signatureRaw.returnType : '',
-      }
-    : undefined;
-
-  const starterRaw = raw.starterCode && typeof raw.starterCode === 'object'
-    ? raw.starterCode as Record<string, unknown>
-    : {};
-  const starterCode = Object.fromEntries(
-    Object.entries(starterRaw).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
-  );
-
+  const signatureRaw = raw.signature && typeof raw.signature === 'object' ? raw.signature as Record<string, unknown> : null;
+  const signature = signatureRaw ? {
+    funcName: typeof signatureRaw.funcName === 'string' ? signatureRaw.funcName : '',
+    params: toStringArray(signatureRaw.params),
+    returnType: typeof signatureRaw.returnType === 'string' ? signatureRaw.returnType : '',
+  } : undefined;
+  const starterRaw = raw.starterCode && typeof raw.starterCode === 'object' ? raw.starterCode as Record<string, unknown> : {};
+  const starterCode = Object.fromEntries(Object.entries(starterRaw).filter((e): e is [string, string] => typeof e[1] === 'string'));
   const inputSpec = Array.isArray(raw.inputSpec)
     ? raw.inputSpec.map((item) => {
         const v = item && typeof item === 'object' ? item as Record<string, unknown> : {};
-        return {
-          name: typeof v.name === 'string' ? v.name : '',
-          type: typeof v.type === 'string' ? v.type : 'string',
-          lengthVar: typeof v.lengthVar === 'string' ? v.lengthVar : undefined,
-          passToFunc: typeof v.passToFunc === 'boolean' ? v.passToFunc : undefined,
-        };
+        return { name: typeof v.name === 'string' ? v.name : '', type: typeof v.type === 'string' ? v.type : 'string', lengthVar: typeof v.lengthVar === 'string' ? v.lengthVar : undefined, passToFunc: typeof v.passToFunc === 'boolean' ? v.passToFunc : undefined };
       }).filter((v) => v.name)
     : [];
-
   const samples = Array.isArray(raw.samples)
-    ? raw.samples.map((sample) => {
-        const s = sample && typeof sample === 'object' ? sample as Record<string, unknown> : {};
-        return {
-          input: typeof s.input === 'string' ? s.input : '',
-          output: typeof s.output === 'string' ? s.output : '',
-        };
-      })
+    ? raw.samples.map((s) => { const o = s && typeof s === 'object' ? s as Record<string, unknown> : {}; return { input: typeof o.input === 'string' ? o.input : '', output: typeof o.output === 'string' ? o.output : '' }; })
     : [];
-
   return {
     id: typeof raw.id === 'string' ? raw.id : '',
     title: typeof raw.title === 'string' ? raw.title : 'Untitled problem',
@@ -99,190 +67,83 @@ function normalizeProblem(value: unknown): Problem {
     outputFormat: typeof raw.outputFormat === 'string' ? raw.outputFormat : '',
     constraints: typeof raw.constraints === 'string' ? raw.constraints : '',
     difficulty: typeof raw.difficulty === 'string' ? raw.difficulty : undefined,
-    samples,
-    starterCode,
-    inputSpec,
-    signature,
+    samples, starterCode, inputSpec, signature,
     driverLanguages: toStringArray(raw.driverLanguages),
   };
 }
 
 function normalizeOpponent(value: unknown): Opponent {
   const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  return {
-    userId: typeof raw.userId === 'string' ? raw.userId : '',
-    username: typeof raw.username === 'string' ? raw.username : 'opponent',
-    rating: toNumber(raw.rating),
-  };
+  return { userId: typeof raw.userId === 'string' ? raw.userId : '', username: typeof raw.username === 'string' ? raw.username : 'opponent', rating: toNumber(raw.rating) };
 }
 
-// Single source of truth for "is this problem+language function-only or raw
-// full-program". Used by both the banner/instructions render AND
-// loadStarterCode below - previously these were two separate inline checks
-// that quietly drifted apart (banner said "write only twoSum(nums, target)"
-// while the editor preloaded the raw stdin template, since loadStarterCode
-// was still keying off match.mode instead of this). Change the rule once,
-// here, and both call sites stay in sync automatically.
 function computeIoMode(problem: Problem | undefined, language: string): 'function' | 'raw' {
   if (!problem) return 'raw';
-  const hasDriver = !!problem.driverLanguages?.includes(language);
-  const hasAutoWrapper = WRAPPER_SUPPORTED_LANGS.includes(language) && !!problem.signature?.funcName;
-  return hasDriver || hasAutoWrapper ? 'function' : 'raw';
+  return (!!problem.driverLanguages?.includes(language) || (WRAPPER_SUPPORTED_LANGS.includes(language) && !!problem.signature?.funcName)) ? 'function' : 'raw';
 }
-
-function hasHiddenDriver(problem: Problem | undefined, language: string) {
-  return !!problem?.driverLanguages?.includes(language);
-}
-
-function getParamType(problem: Problem, param: string) {
-  return problem.inputSpec?.find((v) => v.name === param)?.type || 'string';
-}
-
-function getParamSpec(problem: Problem, param: string) {
-  return problem.inputSpec?.find((v) => v.name === param);
-}
-
-function javaType(type: string) {
-  const map: Record<string, string> = {
-    int: 'int',
-    float: 'double',
-    bool: 'boolean',
-    string: 'String',
-    'int[]': 'int[]',
-    'float[]': 'double[]',
-    'string[]': 'String[]',
-  };
-  return map[type] || 'Object';
-}
-
-function cppType(type: string) {
-  const map: Record<string, string> = {
-    int: 'int',
-    float: 'double',
-    bool: 'bool',
-    string: 'string',
-    'int[]': 'vector<int>',
-    'float[]': 'vector<double>',
-    'string[]': 'vector<string>',
-  };
-  return map[type] || 'auto';
-}
-
-function goType(type: string) {
-  const map: Record<string, string> = {
-    int: 'int',
-    float: 'float64',
-    bool: 'bool',
-    string: 'string',
-    'int[]': '[]int',
-    'float[]': '[]float64',
-    'string[]': '[]string',
-  };
-  return map[type] || 'interface{}';
-}
-
-function cType(type: string) {
-  if (type === 'float') return 'double';
-  if (type === 'bool') return 'bool';
-  if (type === 'string') return 'char*';
-  if (type.endsWith('[]')) return type === 'float[]' ? 'double*' : type === 'string[]' ? 'char**' : 'int*';
-  return 'int';
-}
-
+function hasHiddenDriver(problem: Problem | undefined, language: string) { return !!problem?.driverLanguages?.includes(language); }
+function getParamType(problem: Problem, param: string) { return problem.inputSpec?.find((v) => v.name === param)?.type || 'string'; }
+function getParamSpec(problem: Problem, param: string) { return problem.inputSpec?.find((v) => v.name === param); }
+function javaType(t: string) { return ({ int:'int', float:'double', bool:'boolean', string:'String', 'int[]':'int[]', 'float[]':'double[]', 'string[]':'String[]' } as Record<string,string>)[t] || 'Object'; }
+function cppType(t: string)  { return ({ int:'int', float:'double', bool:'bool', string:'string', 'int[]':'vector<int>', 'float[]':'vector<double>', 'string[]':'vector<string>' } as Record<string,string>)[t] || 'auto'; }
+function goType(t: string)   { return ({ int:'int', float:'float64', bool:'bool', string:'string', 'int[]':'[]int', 'float[]':'[]float64', 'string[]':'[]string' } as Record<string,string>)[t] || 'interface{}'; }
+function cType(t: string)    { if (t==='float') return 'double'; if (t==='bool') return 'bool'; if (t==='string') return 'char*'; if (t.endsWith('[]')) return t==='float[]'?'double*':t==='string[]'?'char**':'int*'; return 'int'; }
 function defaultReturn(type: string, language: string) {
-  if (type.endsWith('[]')) {
-    if (language === 'java') return type === 'int[]' ? 'return new int[0];' : type === 'float[]' ? 'return new double[0];' : 'return new String[0];';
-    if (language === 'cpp') return 'return {};';
-    if (language === 'go') return 'return nil';
-    if (language === 'c') return 'return NULL;';
-    return 'return [];';
-  }
-  if (type === 'bool') return language === 'python' ? 'return False' : 'return false;';
-  if (type === 'string') return language === 'python' ? "return ''" : 'return "";';
-  if (type === 'float') return language === 'python' || language === 'go' ? 'return 0.0' : 'return 0.0;';
-  return language === 'python' || language === 'go' ? 'return 0' : 'return 0;';
+  if (type.endsWith('[]')) { if (language==='java') return type==='int[]'?'return new int[0];':type==='float[]'?'return new double[0];':'return new String[0];'; if (language==='cpp') return 'return {};'; if (language==='go') return 'return nil'; if (language==='c') return 'return NULL;'; return 'return [];'; }
+  if (type==='bool') return language==='python'?'return False':'return false;';
+  if (type==='string') return language==='python'?"return ''":'return "";';
+  if (type==='float') return (language==='python'||language==='go')?'return 0.0':'return 0.0;';
+  return (language==='python'||language==='go')?'return 0':'return 0;';
 }
-
 function functionSignatureForLanguage(language: string, problem: Problem, driverMode: boolean) {
-  const sig = problem.signature;
-  if (!sig?.funcName) return '';
+  const sig = problem.signature; if (!sig?.funcName) return '';
   const params = sig.params || [];
-  if (language === 'python') return `def ${sig.funcName}(${params.join(', ')}):`;
-  if (language === 'javascript') return `function ${sig.funcName}(${params.join(', ')})`;
-  if (language === 'go') {
-    const typed = params.map((p) => `${p} ${goType(getParamType(problem, p))}`).join(', ');
-    return `func ${sig.funcName}(${typed}) ${goType(sig.returnType)}`;
-  }
-  if (language === 'java') {
-    const typed = params.map((p) => `${javaType(getParamType(problem, p))} ${p}`).join(', ');
-    const method = `public static ${javaType(sig.returnType)} ${sig.funcName}(${typed})`;
-    return driverMode ? `class Solution { ${method} }` : method;
-  }
-  if (language === 'cpp') {
-    const typed = params.map((p) => {
-      const type = cppType(getParamType(problem, p));
-      return getParamType(problem, p).endsWith('[]') ? `const ${type}& ${p}` : `${type} ${p}`;
-    }).join(', ');
-    return `${cppType(sig.returnType)} ${sig.funcName}(${typed})`;
-  }
-  if (language === 'c') {
-    const typed: string[] = [];
-    params.forEach((p) => {
-      const spec = getParamSpec(problem, p);
-      const type = spec?.type || 'int';
-      typed.push(`${cType(type)} ${p}`);
-      if (type.endsWith('[]')) typed.push(`int ${p}Size`);
-    });
-    if (sig.returnType.endsWith('[]')) typed.push('int* returnSize');
-    return `${cType(sig.returnType)} ${sig.funcName}(${typed.join(', ')})`;
-  }
+  if (language==='python') return `def ${sig.funcName}(${params.join(', ')}):`;
+  if (language==='javascript') return `function ${sig.funcName}(${params.join(', ')})`;
+  if (language==='go') { const typed = params.map((p) => `${p} ${goType(getParamType(problem,p))}`).join(', '); return `func ${sig.funcName}(${typed}) ${goType(sig.returnType)}`; }
+  if (language==='java') { const typed = params.map((p) => `${javaType(getParamType(problem,p))} ${p}`).join(', '); const method = `public static ${javaType(sig.returnType)} ${sig.funcName}(${typed})`; return driverMode ? `class Solution { ${method} }` : method; }
+  if (language==='cpp') { const typed = params.map((p) => { const t = cppType(getParamType(problem,p)); return getParamType(problem,p).endsWith('[]')?`const ${t}& ${p}`:`${t} ${p}`; }).join(', '); return `${cppType(sig.returnType)} ${sig.funcName}(${typed})`; }
+  if (language==='c') { const typed: string[] = []; params.forEach((p) => { const spec = getParamSpec(problem,p); const t = spec?.type||'int'; typed.push(`${cType(t)} ${p}`); if (t.endsWith('[]')) typed.push(`int ${p}Size`); }); if (sig.returnType.endsWith('[]')) typed.push('int* returnSize'); return `${cType(sig.returnType)} ${sig.funcName}(${typed.join(', ')})`; }
   return `${sig.funcName}(${params.join(', ')})`;
 }
-
 function buildFunctionStarter(language: string, problem?: Problem, driverMode = false) {
   if (!problem?.signature?.funcName) return '';
   const sigText = functionSignatureForLanguage(language, problem, driverMode);
   const ret = defaultReturn(problem.signature.returnType, language);
-  if (language === 'python') return `${sigText}\n    # write your logic here\n    ${ret}\n`;
-  if (language === 'javascript') return `${sigText} {\n  // write your logic here\n  ${ret}\n}\n`;
-  if (language === 'java') {
-    const method = functionSignatureForLanguage(language, problem, false);
-    const body = `    ${method} {\n        // write your logic here\n        ${ret}\n    }`;
-    return driverMode ? `class Solution {\n${body}\n}\n` : `${method} {\n    // write your logic here\n    ${ret}\n}\n`;
-  }
-  if (language === 'cpp' || language === 'c' || language === 'go') {
-    const indent = language === 'go' ? '\t' : '    ';
-    return `${sigText} {\n${indent}// write your logic here\n${indent}${ret}\n}\n`;
-  }
+  if (language==='python') return `${sigText}\n    # write your logic here\n    ${ret}\n`;
+  if (language==='javascript') return `${sigText} {\n  // write your logic here\n  ${ret}\n}\n`;
+  if (language==='java') { const method = functionSignatureForLanguage(language, problem, false); const body = `    ${method} {\n        // write your logic here\n        ${ret}\n    }`; return driverMode ? `class Solution {\n${body}\n}\n` : `${method} {\n    // write your logic here\n    ${ret}\n}\n`; }
+  if (language==='cpp'||language==='c'||language==='go') { const indent = language==='go'?'\t':'    '; return `${sigText} {\n${indent}// write your logic here\n${indent}${ret}\n}\n`; }
   return '';
 }
-
 function starterLooksFunctionOnly(starter: string, problem: Problem | undefined, language: string) {
-  if (!starter || !problem?.signature?.funcName || !starter.includes(problem.signature.funcName)) return false;
-  const rawProgramMarkers = ['public class Main', 'static void main', 'int main(', 'func main(', 'readFileSync(0', 'Scanner sc'];
-  if (rawProgramMarkers.some((marker) => starter.includes(marker))) return false;
-  if (language === 'java' && hasHiddenDriver(problem, language) && !starter.includes('class Solution')) return false;
+  if (!starter||!problem?.signature?.funcName||!starter.includes(problem.signature.funcName)) return false;
+  const rawMarkers = ['public class Main','static void main','int main(','func main(','readFileSync(0','Scanner sc'];
+  if (rawMarkers.some((m) => starter.includes(m))) return false;
+  if (language==='java'&&hasHiddenDriver(problem,language)&&!starter.includes('class Solution')) return false;
   return true;
 }
 
-interface Opponent {
-  userId: string;
-  username: string;
-  rating: number;
+function verdictLabel(verdict?: string) {
+  switch (verdict) {
+    case 'AC':  return 'Accepted';
+    case 'WA':  return 'Wrong Answer';
+    case 'CE':  return 'Compilation Error';
+    case 'RE':  return 'Runtime Error';
+    case 'TLE': return 'Time Limit Exceeded';
+    case 'UNSUPPORTED_LANGUAGE': return 'Unsupported Language';
+    case 'ENGINE_ERROR': return 'Judge Error';
+    default: return 'Result';
+  }
 }
 
+interface Opponent { userId: string; username: string; rating: number; }
 interface MatchState {
-  matchId: string;
-  problem: Problem;
-  opponent: Opponent;
-  mode: string;
-  language: string;
-  serverTime: number;
-  codingStartsAt: number;
-  codingEndsAt: number;
-  readPhaseSec: number;
+  matchId: string; problem: Problem; opponent: Opponent; mode: string; language: string;
+  serverTime: number; codingStartsAt: number; codingEndsAt: number; readPhaseSec: number;
 }
 
+/* ─── Main DuelPage ─────────────────────────────────────────────────── */
 export default function DuelPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -295,7 +156,6 @@ export default function DuelPage() {
   const [language, setLanguage] = useState('python');
   const [code, setCode] = useState('');
   const prevCodeLen = useRef(0);
-  // Guard: only load starter code on first match init, never on sync polls
   const matchInitialized = useRef(false);
   const [runResult, setRunResult] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -311,6 +171,7 @@ export default function DuelPage() {
   const [runTotalCount, setRunTotalCount] = useState<number | undefined>(undefined);
   const [resultsPanelMode, setResultsPanelMode] = useState<'idle' | 'run' | 'submit'>('idle');
   const [resultsPanelOpen, setResultsPanelOpen] = useState(false);
+  const [phaseFlash, setPhaseFlash] = useState(false);
 
   const loadStarterCode = useCallback((lang: string, problem?: Problem) => {
     const ioMode = computeIoMode(problem, lang);
@@ -320,9 +181,7 @@ export default function DuelPage() {
     const practiceStarter = problem?.starterCode?.[key] || '';
     const legacyStarter = problem?.starterCode?.[lang] || '';
     const starter = ioMode === 'function'
-      ? (driverMode && generated
-          ? generated
-          : practiceStarter || (starterLooksFunctionOnly(legacyStarter, problem, lang) ? legacyStarter : generated) || '')
+      ? (driverMode && generated ? generated : practiceStarter || (starterLooksFunctionOnly(legacyStarter, problem, lang) ? legacyStarter : generated) || '')
       : legacyStarter;
     setCode(starter);
     prevCodeLen.current = starter.length;
@@ -343,42 +202,27 @@ export default function DuelPage() {
     };
     setMatch(m);
     setLoadError('');
-
-    // Only load starter code ONCE — never overwrite the user's typed code
     if (!matchInitialized.current) {
       matchInitialized.current = true;
       setLanguage(matchLanguage);
       loadStarterCode(matchLanguage, m.problem);
     }
-
     const now = Date.now();
     const status = data.status as string | undefined;
     const serverPhase = data.phase as string;
-    if (status === 'finished' || serverPhase === 'finished') {
-      setPhase('finished');
-    } else if ((m.codingStartsAt > 0 && now >= m.codingStartsAt) || serverPhase === 'coding') {
-      setPhase('coding');
-    } else {
-      setPhase('reading');
-    }
-
-    if (data.hasSubmitted) {
-      setSubmitted(true);
-      setRunResult('Submitted — waiting for opponent or timeout...');
-    }
+    if (status === 'finished' || serverPhase === 'finished') { setPhase('finished'); }
+    else if ((m.codingStartsAt > 0 && now >= m.codingStartsAt) || serverPhase === 'coding') { setPhase('coding'); }
+    else { setPhase('reading'); }
+    if (data.hasSubmitted) { setSubmitted(true); setRunResult('Submitted — waiting for opponent or timeout…'); }
   }, [matchId, loadStarterCode]);
 
   const fetchMatchResult = useCallback(async () => {
     try {
       const result = await api.getMatchResult(matchId);
-      setResults(result);
-      setPhase('finished');
-      setRunResult('Match completed.');
+      setResults(result); setPhase('finished'); setRunResult('Match completed.');
       sessionStorage.removeItem(`match:${matchId}`);
       return true;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   }, [matchId]);
 
   const syncMatchDetails = useCallback(async () => {
@@ -386,363 +230,231 @@ export default function DuelPage() {
       const details = await api.getMatchDetails(matchId);
       if (!details) return;
       const d = details as Record<string, unknown>;
-
-      // Only update timing + phase — do NOT call initMatch which would reset the editor code
-      setMatch((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          serverTime: toNumber(d.serverTime) || prev.serverTime,
-          codingStartsAt: toNumber(d.codingStartsAt) || prev.codingStartsAt,
-          codingEndsAt: toNumber(d.codingEndsAt) || prev.codingEndsAt,
-        };
-      });
-
+      setMatch((prev) => !prev ? prev : { ...prev, serverTime: toNumber(d.serverTime) || prev.serverTime, codingStartsAt: toNumber(d.codingStartsAt) || prev.codingStartsAt, codingEndsAt: toNumber(d.codingEndsAt) || prev.codingEndsAt });
       const serverPhase = d.phase as string;
       const status = d.status as string | undefined;
-      if (status === 'finished' || serverPhase === 'finished') {
-        await fetchMatchResult();
-      } else if (serverPhase === 'coding') {
-        setPhase('coding');
-      }
-
+      if (status === 'finished' || serverPhase === 'finished') { await fetchMatchResult(); }
+      else if (serverPhase === 'coding') { setPhase('coding'); }
       sessionStorage.setItem(`match:${matchId}`, JSON.stringify(details));
     } catch { /* ignore */ }
   }, [matchId, fetchMatchResult]);
 
-  useEffect(() => {
-    if (!loading && !user) router.push('/login');
-  }, [user, loading, router]);
+  useEffect(() => { if (!loading && !user) router.push('/login'); }, [user, loading, router]);
 
   useEffect(() => {
     if (!user) return;
     const token = localStorage.getItem('accessToken');
     if (token) wsClient.connect(token).catch(() => {});
-
     const loadMatch = async () => {
       let loadedFromStorage = false;
       const stored = sessionStorage.getItem(`match:${matchId}`);
-      if (stored) {
-        try {
-          initMatch(JSON.parse(stored));
-          loadedFromStorage = true;
-        } catch { /* fall through */ }
-      }
+      if (stored) { try { initMatch(JSON.parse(stored)); loadedFromStorage = true; } catch { /* fall through */ } }
       try {
         const details = await api.getMatchDetails(matchId);
         if (details) {
           initMatch(details as Record<string, unknown>);
           sessionStorage.setItem(`match:${matchId}`, JSON.stringify(details));
-          if ((details as Record<string, unknown>).phase === 'finished' ||
-              (details as Record<string, unknown>).status === 'finished') {
-            await fetchMatchResult();
-          }
-        } else if (!loadedFromStorage) {
-          setLoadError('Match data was not available. The match may have expired or been removed.');
-        }
-      } catch (err) {
-        if (!loadedFromStorage) {
-          setLoadError(err instanceof Error ? err.message : 'Could not load match data.');
-        }
-      }
+          if ((details as Record<string, unknown>).phase === 'finished' || (details as Record<string, unknown>).status === 'finished') await fetchMatchResult();
+        } else if (!loadedFromStorage) { setLoadError('Match data was not available. The match may have expired or been removed.'); }
+      } catch (err) { if (!loadedFromStorage) setLoadError(err instanceof Error ? err.message : 'Could not load match data.'); }
     };
     loadMatch();
-
-    const unsubFound = wsClient.on('match:found', (data) => {
-      if ((data.matchId as string) === matchId) {
-        sessionStorage.setItem(`match:${matchId}`, JSON.stringify(data));
-        initMatch(data);
-      }
-    });
-
+    const unsubFound = wsClient.on('match:found', (data) => { if ((data.matchId as string) === matchId) { sessionStorage.setItem(`match:${matchId}`, JSON.stringify(data)); initMatch(data); } });
     const unsubCoding = wsClient.on('match:coding_start', (data) => {
       if ((data.matchId as string) === matchId) {
         setPhase('coding');
-        if (data.codingEndsAt) {
-          setMatch((m) => m ? { ...m, codingEndsAt: data.codingEndsAt as number } : m);
-        }
+        setPhaseFlash(true);
+        setTimeout(() => setPhaseFlash(false), 2000);
+        if (data.codingEndsAt) setMatch((m) => m ? { ...m, codingEndsAt: data.codingEndsAt as number } : m);
       }
     });
-
-    const unsubProgress = wsClient.on('submission:progress', (data) => {
-      if (data.userId !== user.id) {
-        setOpponentProgress(`${data.passedCount}/${data.totalCount}${data.isFullAC ? ' ✓' : ''}`);
-      }
-    });
-
-    const unsubFinished = wsClient.on('match:finished', (data) => {
-      setPhase('finished');
-      setResults(data);
-      setRunResult('Match completed.');
-      sessionStorage.removeItem(`match:${matchId}`);
-    });
-
-    return () => {
-      unsubFound();
-      unsubCoding();
-      unsubProgress();
-      unsubFinished();
-    };
+    const unsubProgress = wsClient.on('submission:progress', (data) => { if (data.userId !== user.id) setOpponentProgress(`${data.passedCount}/${data.totalCount}${data.isFullAC ? ' ✓' : ''}`); });
+    const unsubFinished = wsClient.on('match:finished', (data) => { setPhase('finished'); setResults(data); setRunResult('Match completed.'); sessionStorage.removeItem(`match:${matchId}`); });
+    return () => { unsubFound(); unsubCoding(); unsubProgress(); unsubFinished(); };
   }, [user, matchId, initMatch, fetchMatchResult]);
 
-  useEffect(() => {
-    if (!match || phase === 'finished') return;
-    const id = setInterval(() => {
-      syncMatchDetails().catch(() => {});
-    }, 5000);
-    return () => clearInterval(id);
-  }, [match, phase, syncMatchDetails]);
+  useEffect(() => { if (!match || phase === 'finished') return; const id = setInterval(() => syncMatchDetails().catch(() => {}), 5000); return () => clearInterval(id); }, [match, phase, syncMatchDetails]);
+  useEffect(() => { if (phase !== 'finished' && !results && match && match.codingEndsAt > 0 && Date.now() >= match.codingEndsAt) { const id = setTimeout(() => fetchMatchResult().catch(() => {}), 0); return () => clearTimeout(id); } }, [phase, results, match, fetchMatchResult]);
+  useEffect(() => { if (!submitted || results || phase === 'finished') return; const id = setInterval(() => fetchMatchResult().catch(() => {}), 2000); return () => clearInterval(id); }, [submitted, results, phase, fetchMatchResult]);
 
-  useEffect(() => {
-    if (phase !== 'finished' && !results && match && match.codingEndsAt > 0 && Date.now() >= match.codingEndsAt) {
-      const id = setTimeout(() => fetchMatchResult().catch(() => {}), 0);
-      return () => clearTimeout(id);
-    }
-  }, [phase, results, match, fetchMatchResult]);
-
-  useEffect(() => {
-    if (!submitted || results || phase === 'finished') return;
-    const id = setInterval(() => {
-      fetchMatchResult().catch(() => {});
-    }, 2000);
-    return () => clearInterval(id);
-  }, [submitted, results, phase, fetchMatchResult]);
-
-  const handleLanguageChange = (lang: string) => {
-    setLanguage(lang);
-    if (match) loadStarterCode(lang, match.problem);
-  };
-
-  const handleTabSwitch = useCallback(() => {
-    setTabWarnings((w) => {
-      const next = w + 1;
-      if (next >= 3) alert('Warning: Excessive tab switching may result in forfeit.');
-      return next;
-    });
-  }, []);
+  const handleLanguageChange = (lang: string) => { setLanguage(lang); if (match) loadStarterCode(lang, match.problem); };
+  const handleTabSwitch = useCallback(() => { setTabWarnings((w) => { const next = w + 1; if (next >= 3) alert('Warning: Excessive tab switching may result in forfeit.'); return next; }); }, []);
 
   const handleRun = async () => {
     if (!match) return;
-    setRunning(true);
-    setRunDetails(null);
-    setRunVerdict(undefined);
-    setRunPassedCount(undefined);
-    setRunTotalCount(undefined);
-    setResultsPanelMode('run');
-    setResultsPanelOpen(true);
-    setSubmittedWaiting(false);
+    setRunning(true); setRunDetails(null); setRunVerdict(undefined); setRunPassedCount(undefined); setRunTotalCount(undefined);
+    setResultsPanelMode('run'); setResultsPanelOpen(true); setSubmittedWaiting(false);
     try {
-      const result = await api.runCode(matchId, code, language) as {
-        passedCount?: number; totalCount?: number; verdict?: string;
-        testResults?: Array<{ passed: boolean; verdict?: string; input: string; expectedOutput: string; actualOutput: string; error?: string; executionTime?: number }>;
-      };
-      const passed = result.passedCount ?? 0;
-      const total = result.totalCount ?? result.testResults?.length ?? 0;
-      setRunVerdict(result.verdict);
-      setRunPassedCount(passed);
-      setRunTotalCount(total);
-      setRunResult(`${verdictLabel(result.verdict)} - ${passed}/${total} sample${total !== 1 ? 's' : ''} passed`);
-      if (result.testResults) {
-        setRunDetails(result.testResults.map(r => ({
-          passed: r.passed,
-          verdict: r.verdict || (r.passed ? 'AC' : 'WA'),
-          input: r.input || '',
-          expected: r.expectedOutput || '',
-          actual: r.actualOutput || '',
-          error: r.error,
-          executionTime: r.executionTime,
-        })));
-      }
-    } catch (err) {
-      setRunResult(err instanceof Error ? err.message : 'Run failed');
-      setRunVerdict('ENGINE_ERROR');
-    } finally {
-      setRunning(false);
-    }
+      const result = await api.runCode(matchId, code, language) as { passedCount?: number; totalCount?: number; verdict?: string; testResults?: Array<{ passed: boolean; verdict?: string; input: string; expectedOutput: string; actualOutput: string; error?: string; executionTime?: number }>; };
+      const passed = result.passedCount ?? 0; const total = result.totalCount ?? result.testResults?.length ?? 0;
+      setRunVerdict(result.verdict); setRunPassedCount(passed); setRunTotalCount(total);
+      setRunResult(`${verdictLabel(result.verdict)} — ${passed}/${total} sample${total !== 1 ? 's' : ''} passed`);
+      if (result.testResults) setRunDetails(result.testResults.map(r => ({ passed: r.passed, verdict: r.verdict || (r.passed ? 'AC' : 'WA'), input: r.input || '', expected: r.expectedOutput || '', actual: r.actualOutput || '', error: r.error, executionTime: r.executionTime })));
+    } catch (err) { setRunResult(err instanceof Error ? err.message : 'Run failed'); setRunVerdict('ENGINE_ERROR'); }
+    finally { setRunning(false); }
   };
 
   const handleSubmit = async () => {
     if (!match || submitting || submitted) return;
-    setSubmitting(true);
-    setResultsPanelMode('submit');
-    setResultsPanelOpen(true);
-    setSubmittedWaiting(false);
-    setRunDetails(null);
-    setRunVerdict(undefined);
-    setRunPassedCount(undefined);
-    setRunTotalCount(undefined);
+    setSubmitting(true); setResultsPanelMode('submit'); setResultsPanelOpen(true); setSubmittedWaiting(false);
+    setRunDetails(null); setRunVerdict(undefined); setRunPassedCount(undefined); setRunTotalCount(undefined);
     try {
-      const result = await api.submitCode(matchId, code, language, prevCodeLen.current) as {
-        matchFinished: boolean;
-        submission?: {
-          passedCount?: number;
-          totalCount?: number;
-          verdict?: string;
-          isFullAC?: boolean;
-          testResults?: Array<{ passed: boolean; verdict?: string; input: string; expectedOutput: string; actualOutput: string; error?: string; executionTime?: number }>;
-        };
-      };
-      prevCodeLen.current = getCodeLength(code);
-      setSubmitted(true);
-
+      const result = await api.submitCode(matchId, code, language, prevCodeLen.current) as { matchFinished: boolean; submission?: { passedCount?: number; totalCount?: number; verdict?: string; isFullAC?: boolean; testResults?: Array<{ passed: boolean; verdict?: string; input: string; expectedOutput: string; actualOutput: string; error?: string; executionTime?: number }>; }; };
+      prevCodeLen.current = getCodeLength(code); setSubmitted(true);
       const sub = result.submission;
-      if (sub?.testResults) {
-        setRunDetails(sub.testResults.map(r => ({
-          passed: r.passed,
-          verdict: r.verdict || (r.passed ? 'AC' : 'WA'),
-          input: r.input || '',
-          expected: r.expectedOutput || '',
-          actual: r.actualOutput || '',
-          error: r.error,
-          executionTime: r.executionTime,
-        })));
-      }
-      const passed = sub?.passedCount ?? 0;
-      const total = sub?.totalCount ?? sub?.testResults?.length ?? 0;
-      setRunVerdict(sub?.verdict);
-      setRunPassedCount(passed);
-      setRunTotalCount(total);
-      setRunResult(
-        total > 0
-          ? `Submitted - ${verdictLabel(sub?.verdict)} - ${passed}/${total} test cases passed`
-          : 'Submitted'
-      );
-
-      if (result.matchFinished) {
-        setRunResult('Match completed. Loading results...');
-        setSubmittedWaiting(false);
-        await fetchMatchResult();
-      } else {
-        setSubmittedWaiting(true);
-      }
-    } catch (err) {
-      setRunResult(err instanceof Error ? err.message : 'Submit failed');
-      setRunVerdict('ENGINE_ERROR');
-    } finally {
-      setSubmitting(false);
-    }
+      if (sub?.testResults) setRunDetails(sub.testResults.map(r => ({ passed: r.passed, verdict: r.verdict || (r.passed ? 'AC' : 'WA'), input: r.input || '', expected: r.expectedOutput || '', actual: r.actualOutput || '', error: r.error, executionTime: r.executionTime })));
+      const passed = sub?.passedCount ?? 0; const total = sub?.totalCount ?? sub?.testResults?.length ?? 0;
+      setRunVerdict(sub?.verdict); setRunPassedCount(passed); setRunTotalCount(total);
+      setRunResult(total > 0 ? `Submitted — ${verdictLabel(sub?.verdict)} — ${passed}/${total} test cases passed` : 'Submitted');
+      if (result.matchFinished) { setSubmittedWaiting(false); setRunResult('Match completed. Loading results…'); await fetchMatchResult(); }
+      else { setSubmittedWaiting(true); }
+    } catch (err) { setRunResult(err instanceof Error ? err.message : 'Submit failed'); setRunVerdict('ENGINE_ERROR'); }
+    finally { setSubmitting(false); }
   };
 
-  if (loading || !user) return <div className="p-8 text-center">Loading...</div>;
+  /* ── Loading / error states ── */
+  if (loading || !user) {
+    return (
+      <div className="h-screen surface flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-[color-mix(in_srgb,var(--primary)_30%,transparent)] border-t-[#3B82F6] rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (phase === 'finished' && results) {
-    return (
-      <>
-        <AppNav />
-        <ResultsView results={results} onBack={() => router.push('/dashboard')} />
-      </>
-    );
+    return <ResultsView results={results} onBack={() => router.push('/dashboard')} />;
   }
 
   if (phase === 'finished' && !results) {
     return (
-      <div className="min-h-screen">
-        <AppNav />
-        <div className="flex flex-col items-center justify-center gap-4 p-12">
-          <div className="text-[var(--cf-blue)] font-bold">Match completed. Loading results...</div>
-          <button onClick={() => fetchMatchResult()} className="cf-btn px-4 py-2">
-            Refresh Result
-          </button>
-          <Link href="/dashboard" className="text-[var(--cf-blue)] underline text-sm">Back to Dashboard</Link>
-        </div>
+      <div className="h-screen surface flex flex-col items-center justify-center gap-4">
+        <div className="w-6 h-6 border-2 border-[color-mix(in_srgb,var(--primary)_30%,transparent)] border-t-[#3B82F6] rounded-full animate-spin" />
+        <p className="text-sm text-secondary">Match completed. Loading results…</p>
+        <button onClick={() => fetchMatchResult()} className="px-4 py-2 bg-[var(--bg-elevated)] hover:bg-[var(--bg-elevated)] border border-[var(--border)] text-sm text-secondary rounded-xl transition-colors">Refresh</button>
+        <Link href="/dashboard" className="text-xs text-muted hover:text-secondary">← Back to Dashboard</Link>
       </div>
     );
   }
 
   if (!match) {
     return (
-      <div className="min-h-screen">
-        <AppNav />
-        <div className="flex flex-col items-center justify-center gap-4 p-12">
-          {loadError ? (
-            <>
-              <div className="cf-panel p-4 max-w-md text-center">
-                <div className="font-bold text-red-600 mb-2">Could not load duel</div>
-                <p className="text-sm text-[var(--cf-muted)]">{loadError}</p>
-              </div>
-              <button
-                onClick={() => {
-                  setLoadError('');
-                  window.location.reload();
-                }}
-                className="cf-btn px-4 py-2"
-              >
-                Retry
-              </button>
-            </>
-          ) : (
-            <div className="text-[var(--cf-blue)] font-bold animate-pulse">Waiting for match data...</div>
-          )}
-          <Link href="/dashboard" className="text-[var(--cf-blue)] underline text-sm">Back to Dashboard</Link>
-        </div>
+      <div className="h-screen surface flex flex-col items-center justify-center gap-4">
+        {loadError ? (
+          <>
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 max-w-sm text-center">
+              <AlertTriangle size={28} className="text-[var(--error)] mx-auto mb-3" />
+              <p className="font-bold text-primary mb-2">Could not load duel</p>
+              <p className="text-sm text-muted">{loadError}</p>
+            </div>
+            <button onClick={() => { setLoadError(''); window.location.reload(); }}
+              className="px-5 py-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-sm font-semibold rounded-xl transition-colors">Retry</button>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-6 h-6 border-2 border-[color-mix(in_srgb,var(--primary)_30%,transparent)] border-t-[#3B82F6] rounded-full animate-spin" />
+            <p className="text-sm text-secondary">Waiting for match data…</p>
+          </div>
+        )}
+        <Link href="/dashboard" className="text-xs text-muted hover:text-secondary">← Back to Dashboard</Link>
       </div>
     );
   }
 
   const editorLocked = phase === 'reading';
   const watermark = `${user.username} · ${matchId.slice(-8)}`;
-
-  // Whether the judge wraps this code (function-only) or runs it raw (full
-  // program) - see computeIoMode above for the single source of truth.
-  // NOT tied to competitive vs practice: a competitive match on a problem
-  // with a driver/signature is just as function-only as a practice match.
   const ioMode = computeIoMode(match.problem, language);
   const usesDriver = hasHiddenDriver(match.problem, language);
-  const solutionSignature = ioMode === 'function'
-    ? functionSignatureForLanguage(language, match.problem, usesDriver)
-    : '';
-  // Whether this match affects ELO - this is the actual practice/competitive
-  // distinction now (see finalizeMatch on the backend).
+  const solutionSignature = ioMode === 'function' ? functionSignatureForLanguage(language, match.problem, usesDriver) : '';
   const rated = match.mode === 'competitive';
 
   return (
     <AntiCapture username={user.username} matchId={matchId}>
-      <div className="h-screen flex flex-col">
-        <div className="cf-nav px-4 py-1.5 flex items-center justify-between text-sm shrink-0">
-          <div className="flex items-center gap-3">
-            <span className="font-bold">DuecIt</span>
-            <span className="opacity-70">|</span>
-            <span>{match.problem.title}</span>
-            <span className="opacity-70">vs</span>
-            <Link href={`/profile/${match.opponent.username}`} className="font-bold no-underline hover:underline">
-              {match.opponent.username}
-            </Link>
-            <span className={ratingClass(match.opponent.rating)}>({match.opponent.rating})</span>
-            <span className="bg-white/20 px-1.5 py-0.5 text-xs capitalize">{match.mode}</span>
+      <div className="h-screen flex flex-col surface overflow-hidden">
+
+        {/* Phase transition flash overlay */}
+        <AnimatePresence>
+          {phaseFlash && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center"
+              style={{ background: 'rgba(59,130,246,0.06)' }}>
+              <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 1.1, opacity: 0 }}
+                className="bg-[var(--primary)] text-white font-bold text-xl px-8 py-4 rounded-2xl shadow-[0_0_40px_rgba(59,130,246,0.5)]">
+                ⚡ Coding Phase Begin!
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Arena bar ── */}
+        <div className="shrink-0 h-12 bg-[var(--bg-input)] border-b border-[var(--border)] px-4 flex items-center justify-between gap-3">
+          {/* Left: logo + problem title + vs */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-6 h-6 bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] rounded-lg flex items-center justify-center">
+                <Swords size={12} className="text-white" />
+              </div>
+            </div>
+            <span className="text-sm font-semibold text-primary truncate max-w-[220px]">{match.problem.title}</span>
+            <span className="text-[#374151] hidden sm:block">·</span>
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="text-xs text-muted">vs</span>
+              <Link href={`/profile/${match.opponent.username}`}
+                className="text-sm font-semibold text-secondary hover:text-primary transition-colors">
+                {match.opponent.username}
+              </Link>
+              <span className={`text-xs font-mono font-bold ${ratingClass(match.opponent.rating)}`}>({match.opponent.rating})</span>
+            </div>
+            <span className={`hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize border ${
+              rated ? 'bg-[var(--primary)]/10 text-[var(--primary)] border-[color-mix(in_srgb,var(--primary)_20%,transparent)]' : 'bg-[var(--bg-elevated)] text-muted border-[var(--border)]'
+            }`}>
+              {match.mode}
+            </span>
           </div>
-          <div className="flex items-center gap-3">
-            {phase === 'reading' ? (
-              <MatchTimer
-                serverTime={match.serverTime}
-                targetTime={match.codingStartsAt}
-                label="Read"
-                onExpire={() => setPhase('coding')}
-              />
-            ) : (
-              <MatchTimer
-                serverTime={match.serverTime}
-                targetTime={match.codingEndsAt}
-                label="Code"
-                onExpire={() => {
-                  setRunResult('Code time ended. Waiting for result...');
-                  fetchMatchResult().catch(() => {});
-                }}
-              />
-            )}
+
+          {/* Right: timers + status */}
+          <div className="flex items-center gap-2 shrink-0">
             {tabWarnings > 0 && (
-              <span className="text-yellow-300 text-xs">Tab: {tabWarnings}</span>
+              <div className="flex items-center gap-1 px-2 py-1 bg-[var(--warning-dim)] border border-[color-mix(in_srgb,var(--warning)_20%,transparent)] rounded-lg">
+                <AlertTriangle size={11} className="text-[var(--warning)]" />
+                <span className="text-xs text-[var(--warning)] font-semibold">{tabWarnings}</span>
+              </div>
             )}
             {opponentProgress && (
-              <span className="text-xs opacity-80">Opponent: {opponentProgress}</span>
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg">
+                <Swords size={11} className="text-muted" />
+                <span className="text-xs text-secondary font-mono">{opponentProgress}</span>
+              </div>
             )}
             {submitted && (
-              <span className="text-xs bg-green-700 px-2 py-0.5">Submitted</span>
+              <div className="flex items-center gap-1 px-2 py-1 bg-[var(--success-dim)] border border-[color-mix(in_srgb,var(--success)_20%,transparent)] rounded-lg">
+                <Check size={11} className="text-[var(--success)]" />
+                <span className="text-xs text-[var(--success)] font-semibold">Submitted</span>
+              </div>
             )}
+
+            {/* Timer */}
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border font-mono text-sm font-bold ${
+              phase === 'reading'
+                ? 'bg-[var(--warning-dim)] border-[color-mix(in_srgb,var(--warning)_20%,transparent)] text-[var(--warning)]'
+                : 'bg-[var(--bg-elevated)] border-[var(--border)] text-primary'
+            }`}>
+              <span className="text-xs opacity-70">{phase === 'reading' ? 'READ' : 'CODE'}</span>
+              {phase === 'reading' ? (
+                <MatchTimer serverTime={match.serverTime} targetTime={match.codingStartsAt} label="Read" onExpire={() => setPhase('coding')} />
+              ) : (
+                <MatchTimer serverTime={match.serverTime} targetTime={match.codingEndsAt} label="Code" onExpire={() => { setRunResult('Time up. Waiting for result…'); fetchMatchResult().catch(() => {}); }} />
+              )}
+            </div>
           </div>
         </div>
 
+        {/* ── Main split ── */}
         <div className="flex-1 grid grid-cols-2 min-h-0">
-          <div className="min-h-0 border-r border-[var(--cf-border)]">
+          {/* Problem panel */}
+          <div className={`min-h-0 border-r border-[var(--border)] relative ${editorLocked ? 'ring-1 ring-[#F59E0B]/20' : ''}`}>
+            {editorLocked && (
+              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#F59E0B] via-[#F59E0B]/50 to-transparent z-10" />
+            )}
             <ProblemPanel
               title={match.problem.title}
               statement={match.problem.statement}
@@ -759,12 +471,10 @@ export default function DuelPage() {
               usesDriver={usesDriver}
             />
           </div>
-          <div className="flex flex-col min-h-0 bg-[var(--editor-bg)]">
-            {/* Editor fills remaining space, results panel below */}
-            <div
-              className="min-h-0 flex-1"
-              style={{ height: resultsPanelOpen ? 'calc(100% - 220px)' : 'calc(100% - 44px)' }}
-            >
+
+          {/* Editor side */}
+          <div className="flex flex-col min-h-0 bg-[var(--bg-input)]">
+            <div className="min-h-0 flex-1" style={{ height: resultsPanelOpen ? 'calc(100% - 220px)' : 'calc(100% - 46px)' }}>
               <DuelEditor
                 language={language}
                 onLanguageChange={handleLanguageChange}
@@ -779,50 +489,32 @@ export default function DuelPage() {
               />
             </div>
 
-            {/* Results panel (expandable) */}
+            {/* Results panel */}
             {resultsPanelOpen && (
               <div style={{ height: '220px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <TestResultsPanel
-                  verdict={runVerdict}
-                  passedCount={runPassedCount}
-                  totalCount={runTotalCount}
+                  verdict={runVerdict} passedCount={runPassedCount} totalCount={runTotalCount}
                   testResults={runDetails || undefined}
-                  isRunning={running}
-                  isSubmitting={submitting}
-                  mode={resultsPanelMode}
-                  submittedWaiting={submittedWaiting}
+                  isRunning={running} isSubmitting={submitting} mode={resultsPanelMode} submittedWaiting={submittedWaiting}
                 />
               </div>
             )}
 
             {/* Action bar */}
             <div className="action-bar">
-              <button
-                onClick={handleRun}
-                disabled={editorLocked || running || submitting}
-                className="run-btn"
-                id="run-samples-btn"
-              >
+              <button onClick={handleRun} disabled={editorLocked || running || submitting} className="run-btn">
                 ▶ Run Samples
               </button>
-              <button
-                onClick={handleSubmit}
-                disabled={editorLocked || submitting || submitted}
-                className={`submit-btn ${submitted ? 'submit-btn-done' : ''}`}
-                id="submit-code-btn"
-              >
+              <button onClick={handleSubmit} disabled={editorLocked || submitting || submitted}
+                className={`submit-btn ${submitted ? 'submit-btn-done' : ''}`}>
                 {submitting ? '⏳ Submitting…' : submitted ? '✓ Submitted' : '⚡ Submit'}
               </button>
-              {runResult && (
-                <span className="action-status" title={runResult}>{runResult}</span>
-              )}
-              {/* Toggle results panel */}
-              {(resultsPanelMode !== 'idle') && (
-                <button
-                  onClick={() => setResultsPanelOpen(o => !o)}
-                  style={{ marginLeft: 'auto', fontSize: '11px', color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer' }}
-                >
-                  {resultsPanelOpen ? '▼ Hide' : '▲ Results'}
+              {runResult && <span className="action-status" title={runResult}>{runResult}</span>}
+              {resultsPanelMode !== 'idle' && (
+                <button onClick={() => setResultsPanelOpen((o) => !o)}
+                  className="ml-auto flex items-center gap-1 text-xs text-muted hover:text-secondary bg-transparent border-none cursor-pointer transition-colors">
+                  {resultsPanelOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  {resultsPanelOpen ? 'Hide' : 'Results'}
                 </button>
               )}
             </div>
@@ -833,160 +525,158 @@ export default function DuelPage() {
   );
 }
 
-function verdictLabel(verdict?: string) {
-  switch (verdict) {
-    case 'AC':
-      return 'Accepted';
-    case 'WA':
-      return 'Wrong Answer';
-    case 'CE':
-      return 'Compilation Error';
-    case 'RE':
-      return 'Runtime Error';
-    case 'TLE':
-      return 'Time Limit Exceeded';
-    case 'UNSUPPORTED_LANGUAGE':
-      return 'Unsupported Language';
-    case 'ENGINE_ERROR':
-      return 'Judge Error';
-    default:
-      return 'Result';
-  }
-}
-
-function ResultsView({
-  results,
-  onBack,
-}: {
-  results: Record<string, unknown>;
-  onBack: () => void;
-}) {
+/* ─── Result Screen ──────────────────────────────────────────────────── */
+function ResultsView({ results, onBack }: { results: Record<string, unknown>; onBack: () => void }) {
   const [showWinnerCode, setShowWinnerCode] = useState(false);
-  const [showLoserCode, setShowLoserCode] = useState(false);
+  const [showLoserCode, setShowLoserCode]   = useState(false);
+  const [confetti, setConfetti] = useState(true);
 
   const isDraw = results.draw as boolean;
   const winner = results.winner as Record<string, unknown> | undefined;
-  const loser = results.loser as Record<string, unknown> | undefined;
-
+  const loser  = results.loser  as Record<string, unknown> | undefined;
   const winnerRatingChange = (winner?.ratingChange as number) ?? 0;
-  const loserRatingChange = (loser?.ratingChange as number) ?? 0;
+  const loserRatingChange  = (loser?.ratingChange  as number) ?? 0;
   const isRated = winnerRatingChange !== 0 || loserRatingChange !== 0;
 
+  useEffect(() => { const t = setTimeout(() => setConfetti(false), 3500); return () => clearTimeout(t); }, []);
+
   return (
-    <div className="min-h-screen bg-[var(--cf-bg)]">
-      <div className="max-w-3xl mx-auto p-4 pt-6">
-
-        {/* Outcome card */}
-        <div className={`rounded-lg p-6 mb-5 text-center shadow-sm ${
-          isDraw
-            ? 'bg-amber-50 border border-amber-200'
-            : 'bg-gradient-to-br from-[#336699]/5 to-[#336699]/10 border border-[#336699]/20'
-        }`}>
-          <div className="text-4xl mb-2">{isDraw ? '🤝' : '🏆'}</div>
-          <h1 className="text-2xl font-bold mb-1">
-            {isDraw ? (
-              <span className="text-amber-600">Draw!</span>
-            ) : (
-              <>
-                <span className="text-[var(--cf-blue)]">{winner?.username as string}</span>{' '}
-                <span className="text-gray-700">wins!</span>
-              </>
-            )}
-          </h1>
-          <p className="text-sm text-gray-500">
-            {isDraw ? 'Both players performed equally.' : 'Match completed.'}
-            {isRated ? '' : ' (Unrated match)'}
-          </p>
+    <div className="min-h-screen surface">
+      {/* Confetti dots */}
+      {confetti && !isDraw && (
+        <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden" aria-hidden>
+          {Array.from({ length: 30 }).map((_, i) => (
+            <motion.div key={i}
+              initial={{ y: -20, x: `${(i * 37) % 100}vw`, opacity: 1, scale: Math.random() * 0.6 + 0.4 }}
+              animate={{ y: '110vh', opacity: 0 }}
+              transition={{ duration: Math.random() * 2 + 1.5, delay: Math.random() * 0.8, ease: 'easeIn' }}
+              className="absolute w-2 h-2 rounded-full"
+              style={{ background: ['#3B82F6','#8B5CF6','#22C55E','#F59E0B','#EF4444'][i % 5] }}
+            />
+          ))}
         </div>
+      )}
 
-        {/* Player comparison */}
+      <div className="max-w-3xl mx-auto px-4 pt-12 pb-16">
+
+        {/* Outcome hero */}
+        <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.5 }}
+          className={`rounded-3xl p-10 text-center mb-6 border ${
+            isDraw
+              ? 'bg-[var(--bg-card)] border-[color-mix(in_srgb,var(--warning)_20%,transparent)] shadow-[0_0_60px_rgba(245,158,11,0.06)]'
+              : 'bg-gradient-to-br from-[#111827] to-[#0D1117] border-[color-mix(in_srgb,var(--primary)_20%,transparent)] shadow-[0_0_60px_rgba(59,130,246,0.08)]'
+          }`}>
+          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+            className="text-5xl mb-4">{isDraw ? '🤝' : '🏆'}</motion.div>
+          <motion.h1 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+            className="text-3xl font-black text-primary mb-2">
+            {isDraw ? <span className="text-[var(--warning)]">Draw!</span> : (
+              <><span className="text-[var(--primary)]">{winner?.username as string}</span> <span>wins!</span></>
+            )}
+          </motion.h1>
+          <p className="text-sm text-muted">
+            {isDraw ? 'Both players performed equally.' : 'Match completed.'}
+            {!isRated && ' · Unrated match'}
+          </p>
+        </motion.div>
+
+        {/* Player comparison card */}
         {winner && loser && (
-          <div className="cf-panel mb-5 overflow-hidden rounded-lg shadow-sm">
-            <div className="grid grid-cols-3 text-center text-xs font-bold uppercase tracking-wide text-gray-500 bg-gray-50 border-b border-gray-200 py-2">
-              <div>Player</div>
-              <div>Score / Time</div>
-              <div>Rating</div>
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+            className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden mb-5">
+            {/* Header */}
+            <div className="grid grid-cols-4 text-xs font-semibold text-muted uppercase tracking-widest px-5 py-3 bg-[var(--bg-input)] border-b border-[var(--border)]">
+              <div>Player</div><div className="text-center">Score</div><div className="text-center">Time</div><div className="text-center">Rating</div>
             </div>
-            <div className={`grid grid-cols-3 items-center py-4 px-4 ${!isDraw ? 'bg-green-50 border-l-4 border-green-500' : ''}`}>
+            {/* Winner row */}
+            <div className={`grid grid-cols-4 items-center px-5 py-4 ${!isDraw ? 'bg-[#22C55E]/5 border-l-2 border-[#22C55E]' : ''}`}>
               <div>
-                <div className="font-bold text-sm">{!isDraw && <span className="text-green-500 mr-1">👑</span>}{winner.username as string}</div>
-                <div className="text-xs text-gray-500">{isDraw ? 'Player' : 'Winner'}</div>
+                <div className="flex items-center gap-1.5">
+                  {!isDraw && <Trophy size={13} className="text-[var(--warning)]" />}
+                  <span className="font-bold text-sm text-primary">{winner.username as string}</span>
+                </div>
+                <p className="text-xs text-muted mt-0.5">{isDraw ? 'Player' : 'Winner'}</p>
               </div>
               <div className="text-center">
-                <div className="font-bold">{Math.round(winner.score as number)}<span className="text-xs text-gray-400 font-normal"> pts</span></div>
-                <div className="text-xs text-gray-500">{Math.round((winner.solveTimeMs as number) / 1000)}s</div>
+                <p className="font-bold text-primary font-mono">{Math.round(winner.score as number)}</p>
+                <p className="text-xs text-muted">pts</p>
+              </div>
+              <div className="text-center">
+                <p className="font-mono text-sm text-secondary">{Math.round((winner.solveTimeMs as number) / 1000)}s</p>
               </div>
               <div className="text-center">
                 {isRated ? (
                   <>
-                    <div className="font-bold text-green-600">{winnerRatingChange >= 0 ? '+' : ''}{winnerRatingChange}</div>
-                    <div className="text-xs text-gray-500">→ {winner.newRating as number}</div>
+                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
+                      className={`font-bold font-mono text-base ${winnerRatingChange >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                      {winnerRatingChange >= 0 ? '+' : ''}{winnerRatingChange}
+                    </motion.p>
+                    <p className="text-xs text-muted">→ {winner.newRating as number}</p>
                   </>
-                ) : (
-                  <div className="text-xs text-gray-400">{winner.newRating as number}</div>
-                )}
+                ) : <p className="text-sm text-muted font-mono">{winner.newRating as number}</p>}
               </div>
             </div>
-            <div className="border-t border-gray-200" />
-            <div className="grid grid-cols-3 items-center py-4 px-4 bg-white">
+            <div className="border-t border-[var(--border)]" />
+            {/* Loser row */}
+            <div className="grid grid-cols-4 items-center px-5 py-4">
               <div>
-                <div className="font-bold text-sm">{loser.username as string}</div>
-                <div className="text-xs text-gray-500">{isDraw ? 'Player' : 'Runner-up'}</div>
+                <p className="font-bold text-sm text-secondary">{loser.username as string}</p>
+                <p className="text-xs text-muted mt-0.5">{isDraw ? 'Player' : 'Runner-up'}</p>
               </div>
               <div className="text-center">
-                <div className="font-bold">{Math.round(loser.score as number)}<span className="text-xs text-gray-400 font-normal"> pts</span></div>
-                <div className="text-xs text-gray-500">{Math.round((loser.solveTimeMs as number) / 1000)}s</div>
+                <p className="font-bold text-secondary font-mono">{Math.round(loser.score as number)}</p>
+                <p className="text-xs text-muted">pts</p>
+              </div>
+              <div className="text-center">
+                <p className="font-mono text-sm text-secondary">{Math.round((loser.solveTimeMs as number) / 1000)}s</p>
               </div>
               <div className="text-center">
                 {isRated ? (
                   <>
-                    <div className="font-bold text-red-600">{loserRatingChange >= 0 ? '+' : ''}{loserRatingChange}</div>
-                    <div className="text-xs text-gray-500">→ {loser.newRating as number}</div>
+                    <p className={`font-bold font-mono text-base ${loserRatingChange >= 0 ? 'text-[var(--success)]' : 'text-[var(--error)]'}`}>
+                      {loserRatingChange >= 0 ? '+' : ''}{loserRatingChange}
+                    </p>
+                    <p className="text-xs text-muted">→ {loser.newRating as number}</p>
                   </>
-                ) : (
-                  <div className="text-xs text-gray-400">{loser.newRating as number}</div>
-                )}
+                ) : <p className="text-sm text-muted font-mono">{loser.newRating as number}</p>}
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* Solutions */}
-        {winner && Boolean(winner.code) && (
-          <div className="cf-panel mb-4 rounded-lg shadow-sm overflow-hidden">
-            <button onClick={() => setShowWinnerCode(o => !o)}
-              className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold hover:bg-gray-50 transition-colors">
-              <span>{winner.username as string}&apos;s Solution ({winner.language as string})</span>
-              <span className="text-gray-400">{showWinnerCode ? '▼' : '▶'}</span>
+        {[
+          { player: winner, show: showWinnerCode, setShow: setShowWinnerCode },
+          { player: loser,  show: showLoserCode,  setShow: setShowLoserCode  },
+        ].filter(({ player }) => player && Boolean(player.code)).map(({ player, show, setShow }, idx) => (
+          <motion.div key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 + idx * 0.1 }}
+            className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden mb-4">
+            <button onClick={() => setShow((o) => !o)}
+              className="w-full flex items-center justify-between px-5 py-3.5 text-sm font-semibold text-secondary hover:text-primary hover:bg-[color-mix(in_srgb,var(--text)_2%,transparent)] transition-colors">
+              <span>{player!.username as string}&apos;s Solution <span className="text-muted font-normal">({player!.language as string})</span></span>
+              {show ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
             </button>
-            {showWinnerCode && (
-              <pre className="bg-[#1e1e1e] text-[#d4d4d4] p-4 overflow-x-auto text-xs font-mono border-t border-gray-200 leading-relaxed">
-                {winner.code as string}
-              </pre>
+            {show && (
+              <motion.pre initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                className="bg-[var(--bg-input)] text-secondary p-5 overflow-x-auto text-xs font-mono border-t border-[var(--border)] leading-relaxed max-h-96">
+                {player!.code as string}
+              </motion.pre>
             )}
-          </div>
-        )}
+          </motion.div>
+        ))}
 
-        {loser && Boolean(loser.code) && (
-          <div className="cf-panel mb-4 rounded-lg shadow-sm overflow-hidden">
-            <button onClick={() => setShowLoserCode(o => !o)}
-              className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold hover:bg-gray-50 transition-colors">
-              <span>{loser.username as string}&apos;s Solution ({loser.language as string})</span>
-              <span className="text-gray-400">{showLoserCode ? '▼' : '▶'}</span>
-            </button>
-            {showLoserCode && (
-              <pre className="bg-[#1e1e1e] text-[#d4d4d4] p-4 overflow-x-auto text-xs font-mono border-t border-gray-200 leading-relaxed">
-                {loser.code as string}
-              </pre>
-            )}
-          </div>
-        )}
-
-        <div className="flex justify-center mt-6">
-          <button onClick={onBack} className="cf-btn px-8 py-2 rounded">Back to Dashboard</button>
+        {/* Actions */}
+        <div className="flex items-center justify-center gap-3 mt-6">
+          <button onClick={onBack}
+            className="flex items-center gap-2 px-6 py-2.5 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-semibold rounded-xl transition-all hover:-translate-y-px hover:shadow-[0_4px_14px_rgba(59,130,246,0.35)] text-sm">
+            <RotateCcw size={14} /> Play Again
+          </button>
+          <button onClick={() => { if (navigator.share) navigator.share({ title: 'DuecIt Match Result', url: window.location.href }); }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-elevated)] border border-[var(--border)] text-secondary font-semibold rounded-xl transition-all text-sm">
+            <Share2 size={14} /> Share
+          </button>
         </div>
       </div>
     </div>
   );
 }
-

@@ -1,69 +1,48 @@
 'use client';
-
-import { motion } from 'framer-motion';
-import { Sun, Moon } from 'lucide-react';
-import { useTheme } from '@/lib/theme-context';
-
+ 
+import { useTheme } from '@/lib/theme';
+ 
 export default function ThemeToggle({ className = '' }: { className?: string }) {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
-
+ 
   return (
     <button
       type="button"
       onClick={toggleTheme}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      className={`theme-toggle ${className}`}
+      title={isDark ? 'Light mode' : 'Dark mode'}
+      className={`relative h-8 w-8 rounded-lg border border-[var(--border)] bg-[var(--panel-raised)] text-[var(--text-muted)] transition-colors duration-200 hover:text-[var(--text)] hover:border-[var(--border-strong)] ${className}`}
     >
-      <motion.div
-        className="theme-toggle-track"
-        layout
-        transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+      <span
+        className="absolute inset-0 flex items-center justify-center transition-all duration-300"
+        style={{ opacity: isDark ? 0 : 1, transform: `rotate(${isDark ? -90 : 0}deg) scale(${isDark ? 0.6 : 1})` }}
       >
-        {/* Stars (dark mode decoration) */}
-        <motion.span
-          className="theme-toggle-star theme-toggle-star-1"
-          animate={{ opacity: isDark ? 1 : 0, scale: isDark ? 1 : 0 }}
-          transition={{ duration: 0.25 }}
-        />
-        <motion.span
-          className="theme-toggle-star theme-toggle-star-2"
-          animate={{ opacity: isDark ? 1 : 0, scale: isDark ? 1 : 0 }}
-          transition={{ duration: 0.25, delay: 0.05 }}
-        />
-
-        {/* Sliding thumb */}
-        <motion.div
-          className="theme-toggle-thumb"
-          layout
-          animate={{ x: isDark ? 0 : 28 }}
-          transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-        >
-          <motion.div
-            animate={{ rotate: isDark ? 0 : 180, scale: isDark ? 1 : 0.9 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            className="theme-toggle-icon-wrap"
-          >
-            {isDark ? (
-              <Moon size={14} className="theme-toggle-icon" />
-            ) : (
-              <Sun size={14} className="theme-toggle-icon" />
-            )}
-          </motion.div>
-        </motion.div>
-
-        {/* Background glow on toggle */}
-        <motion.div
-          className="theme-toggle-glow"
-          animate={{
-            opacity: isDark ? 0.6 : 0.9,
-            background: isDark
-              ? 'linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%)'
-              : 'linear-gradient(135deg, #fde68a 0%, #fbbf24 100%)',
-          }}
-          transition={{ duration: 0.4 }}
-        />
-      </motion.div>
+        <SunIcon />
+      </span>
+      <span
+        className="absolute inset-0 flex items-center justify-center transition-all duration-300"
+        style={{ opacity: isDark ? 1 : 0, transform: `rotate(${isDark ? 0 : 90}deg) scale(${isDark ? 1 : 0.6})` }}
+      >
+        <MoonIcon />
+      </span>
     </button>
+  );
+}
+ 
+function SunIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  );
+}
+ 
+function MoonIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+    </svg>
   );
 }

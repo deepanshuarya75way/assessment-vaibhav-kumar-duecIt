@@ -12,7 +12,7 @@
     "@monaco-editor/react": "^4.7.0",
     "@vercel/analytics": "^2.0.1",
     "framer-motion": "^12.42.2",
-    "lucide-react": "^1.26.0",
+    "lucide-react": "^1.27.0",
     "marked": "^18.0.7",
     "next": "16.2.9",
     "react": "19.2.4",

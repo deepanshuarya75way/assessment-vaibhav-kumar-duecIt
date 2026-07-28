@@ -369,157 +369,33 @@ export default function DuelPage() {
 
   return (
     <AntiCapture username={user.username} matchId={matchId}>
-      <div className="h-screen flex flex-col surface overflow-hidden">
-
-        {/* Phase transition flash overlay */}
+      <div className="terminal-shell flex h-screen flex-col overflow-hidden">
         <AnimatePresence>
           {phaseFlash && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center"
-              style={{ background: 'rgba(59,130,246,0.06)' }}>
-              <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 1.1, opacity: 0 }}
-                className="bg-[var(--primary)] text-white font-bold text-xl px-8 py-4 rounded-2xl shadow-[0_0_40px_rgba(59,130,246,0.5)]">
-                ⚡ Coding Phase Begin!
-              </motion.div>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-[color-mix(in_srgb,var(--accent)_5%,transparent)]">
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="border border-[var(--accent)] bg-[var(--accent)] px-7 py-4 font-mono text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent-contrast)]">&gt; coding_phase / live_sync</motion.div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* ── Arena bar ── */}
-        <div className="shrink-0 h-12 bg-[var(--bg-input)] border-b border-[var(--border)] px-4 flex items-center justify-between gap-3">
-          {/* Left: logo + problem title + vs */}
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-6 h-6 bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] rounded-lg flex items-center justify-center">
-                <Swords size={12} className="text-white" />
-              </div>
-            </div>
-            <span className="text-sm font-semibold text-primary truncate max-w-[220px]">{match.problem.title}</span>
-            <span className="text-[#374151] hidden sm:block">·</span>
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="text-xs text-muted">vs</span>
-              <Link href={`/profile/${match.opponent.username}`}
-                className="text-sm font-semibold text-secondary hover:text-primary transition-colors">
-                {match.opponent.username}
-              </Link>
-              <span className={`text-xs font-mono font-bold ${ratingClass(match.opponent.rating)}`}>({match.opponent.rating})</span>
-            </div>
-            <span className={`hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize border ${
-              rated ? 'bg-[var(--primary)]/10 text-[var(--primary)] border-[color-mix(in_srgb,var(--primary)_20%,transparent)]' : 'bg-[var(--bg-elevated)] text-muted border-[var(--border)]'
-            }`}>
-              {match.mode}
-            </span>
+        <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] bg-[var(--panel)] px-4 lg:px-5">
+          <div className="flex min-w-0 items-center gap-3 font-mono text-[11px]"><Link href="/dashboard" className="flex h-7 w-7 shrink-0 items-center justify-center border border-[var(--accent)] text-[var(--accent)] no-underline">&gt;_</Link><span className="font-semibold text-[var(--text)]">DuecIt</span><span className="hidden text-[var(--text-faint)] sm:inline">/ arena / live</span><span className="hidden border-l border-[var(--border)] pl-3 text-[var(--accent)] md:inline">DSA-014</span><span className="truncate text-[var(--text)]">{match.problem.title}</span><span className="hidden border-l border-[var(--border)] pl-3 text-[var(--text-muted)] lg:inline">opponent <span className="text-[var(--text)]">{match.opponent.username}</span> <span className={ratingClass(match.opponent.rating)}>{match.opponent.rating}</span></span></div>
+          <div className="flex shrink-0 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em]">{tabWarnings > 0 && <span className="hidden items-center gap-1 border border-[var(--warning)] px-2 py-2 text-[var(--warning)] sm:flex"><AlertTriangle size={11} /> {tabWarnings}</span>}{opponentProgress && <span className="hidden border border-[var(--border)] px-2 py-2 text-[var(--text-muted)] md:inline">opponent / {opponentProgress}</span>}{submitted && <span className="hidden items-center gap-1 border border-[var(--accent)] px-2 py-2 text-[var(--accent)] sm:flex"><Check size={11} /> submitted</span>}<span className={`flex items-center gap-2 border px-2 py-2 ${phase === 'reading' ? 'border-[var(--warning)] text-[var(--warning)]' : 'border-[var(--accent)] text-[var(--accent)]'}`}><span>{phase === 'reading' ? 'read' : 'code'}</span>{phase === 'reading' ? <MatchTimer serverTime={match.serverTime} targetTime={match.codingStartsAt} label="Read" onExpire={() => setPhase('coding')} /> : <MatchTimer serverTime={match.serverTime} targetTime={match.codingEndsAt} label="Code" onExpire={() => { setRunResult('Time up. Waiting for result…'); fetchMatchResult().catch(() => {}); }} />}</span></div>
+        </header>
+
+        <div className={`flex min-h-8 shrink-0 items-center justify-between border-b px-4 font-mono text-[10px] uppercase tracking-[0.12em] ${editorLocked ? 'border-[var(--warning)] bg-[var(--warning-soft)] text-[var(--warning)]' : 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'}`}><span>{editorLocked ? '▣ read phase / editor locked' : '⌁ coding phase / live sync'}</span><span className="hidden sm:inline">{editorLocked ? '00:45 elapsed' : 'transition complete · 08:32 remaining'}</span></div>
+
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[40%_60%]">
+          <div className={`relative min-h-0 border-b border-[var(--border)] lg:border-b-0 lg:border-r ${editorLocked ? 'ring-1 ring-inset ring-[var(--warning)]/20' : ''}`}>
+            <ProblemPanel title={match.problem.title} statement={match.problem.statement} inputFormat={match.problem.inputFormat} outputFormat={match.problem.outputFormat} constraints={match.problem.constraints} samples={match.problem.samples} difficulty={match.problem.difficulty} watermark={watermark} ioMode={ioMode} signature={match.problem.signature} language={language} solutionSignature={solutionSignature} usesDriver={usesDriver} />
           </div>
-
-          {/* Right: timers + status */}
-          <div className="flex items-center gap-2 shrink-0">
-            {tabWarnings > 0 && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-[var(--warning-dim)] border border-[color-mix(in_srgb,var(--warning)_20%,transparent)] rounded-lg">
-                <AlertTriangle size={11} className="text-[var(--warning)]" />
-                <span className="text-xs text-[var(--warning)] font-semibold">{tabWarnings}</span>
-              </div>
-            )}
-            {opponentProgress && (
-              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg">
-                <Swords size={11} className="text-muted" />
-                <span className="text-xs text-secondary font-mono">{opponentProgress}</span>
-              </div>
-            )}
-            {submitted && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-[var(--success-dim)] border border-[color-mix(in_srgb,var(--success)_20%,transparent)] rounded-lg">
-                <Check size={11} className="text-[var(--success)]" />
-                <span className="text-xs text-[var(--success)] font-semibold">Submitted</span>
-              </div>
-            )}
-
-            {/* Timer */}
-            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border font-mono text-sm font-bold ${
-              phase === 'reading'
-                ? 'bg-[var(--warning-dim)] border-[color-mix(in_srgb,var(--warning)_20%,transparent)] text-[var(--warning)]'
-                : 'bg-[var(--bg-elevated)] border-[var(--border)] text-primary'
-            }`}>
-              <span className="text-xs opacity-70">{phase === 'reading' ? 'READ' : 'CODE'}</span>
-              {phase === 'reading' ? (
-                <MatchTimer serverTime={match.serverTime} targetTime={match.codingStartsAt} label="Read" onExpire={() => setPhase('coding')} />
-              ) : (
-                <MatchTimer serverTime={match.serverTime} targetTime={match.codingEndsAt} label="Code" onExpire={() => { setRunResult('Time up. Waiting for result…'); fetchMatchResult().catch(() => {}); }} />
-              )}
-            </div>
+          <div className="flex min-h-0 flex-col bg-[var(--editor-bg)]">
+            <div className="min-h-[340px] flex-1" style={{ height: resultsPanelOpen ? 'calc(100% - 220px)' : 'calc(100% - 46px)' }}><DuelEditor language={language} onLanguageChange={handleLanguageChange} value={code} onChange={setCode} readOnly={editorLocked} onTabSwitch={handleTabSwitch} ioMode={ioMode} rated={rated} signature={match.problem.signature} solutionSignature={solutionSignature} /></div>
+            {resultsPanelOpen && <div className="flex h-[220px] shrink-0 flex-col overflow-hidden border-t border-[var(--border)]"><TestResultsPanel verdict={runVerdict} passedCount={runPassedCount} totalCount={runTotalCount} testResults={runDetails || undefined} isRunning={running} isSubmitting={submitting} mode={resultsPanelMode} submittedWaiting={submittedWaiting} /></div>}
+            <div className="action-bar"><button onClick={handleRun} disabled={editorLocked || running || submitting} className="run-btn">&gt; run_samples</button><button onClick={handleSubmit} disabled={editorLocked || submitting || submitted} className={`submit-btn ${submitted ? 'submit-btn-done' : ''}`}>{submitting ? '⌛ submitting…' : submitted ? '✓ submitted' : '&gt; submit'}</button>{runResult && <span className="action-status" title={runResult}>{runResult}</span>}{resultsPanelMode !== 'idle' && <button onClick={() => setResultsPanelOpen((o) => !o)} className="ml-auto flex items-center gap-1 border-0 bg-transparent font-mono text-[10px] uppercase text-[var(--text-muted)] hover:text-[var(--accent)]">{resultsPanelOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}{resultsPanelOpen ? 'hide' : 'results'}</button>}</div>
           </div>
         </div>
-
-        {/* ── Main split ── */}
-        <div className="flex-1 grid grid-cols-2 min-h-0">
-          {/* Problem panel */}
-          <div className={`min-h-0 border-r border-[var(--border)] relative ${editorLocked ? 'ring-1 ring-[#F59E0B]/20' : ''}`}>
-            {editorLocked && (
-              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#F59E0B] via-[#F59E0B]/50 to-transparent z-10" />
-            )}
-            <ProblemPanel
-              title={match.problem.title}
-              statement={match.problem.statement}
-              inputFormat={match.problem.inputFormat}
-              outputFormat={match.problem.outputFormat}
-              constraints={match.problem.constraints}
-              samples={match.problem.samples}
-              difficulty={match.problem.difficulty}
-              watermark={watermark}
-              ioMode={ioMode}
-              signature={match.problem.signature}
-              language={language}
-              solutionSignature={solutionSignature}
-              usesDriver={usesDriver}
-            />
-          </div>
-
-          {/* Editor side */}
-          <div className="flex flex-col min-h-0 bg-[var(--bg-input)]">
-            <div className="min-h-0 flex-1" style={{ height: resultsPanelOpen ? 'calc(100% - 220px)' : 'calc(100% - 46px)' }}>
-              <DuelEditor
-                language={language}
-                onLanguageChange={handleLanguageChange}
-                value={code}
-                onChange={setCode}
-                readOnly={editorLocked}
-                onTabSwitch={handleTabSwitch}
-                ioMode={ioMode}
-                rated={rated}
-                signature={match.problem.signature}
-                solutionSignature={solutionSignature}
-              />
-            </div>
-
-            {/* Results panel */}
-            {resultsPanelOpen && (
-              <div style={{ height: '220px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                <TestResultsPanel
-                  verdict={runVerdict} passedCount={runPassedCount} totalCount={runTotalCount}
-                  testResults={runDetails || undefined}
-                  isRunning={running} isSubmitting={submitting} mode={resultsPanelMode} submittedWaiting={submittedWaiting}
-                />
-              </div>
-            )}
-
-            {/* Action bar */}
-            <div className="action-bar">
-              <button onClick={handleRun} disabled={editorLocked || running || submitting} className="run-btn">
-                ▶ Run Samples
-              </button>
-              <button onClick={handleSubmit} disabled={editorLocked || submitting || submitted}
-                className={`submit-btn ${submitted ? 'submit-btn-done' : ''}`}>
-                {submitting ? '⏳ Submitting…' : submitted ? '✓ Submitted' : '⚡ Submit'}
-              </button>
-              {runResult && <span className="action-status" title={runResult}>{runResult}</span>}
-              {resultsPanelMode !== 'idle' && (
-                <button onClick={() => setResultsPanelOpen((o) => !o)}
-                  className="ml-auto flex items-center gap-1 text-xs text-muted hover:text-secondary bg-transparent border-none cursor-pointer transition-colors">
-                  {resultsPanelOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                  {resultsPanelOpen ? 'Hide' : 'Results'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <footer className="flex min-h-7 shrink-0 items-center justify-between border-t border-[var(--border)] bg-[var(--panel)] px-4 font-mono text-[9px] uppercase tracking-[0.1em] text-[var(--text-faint)]"><span>match / {matchId.slice(-8)} · secure session · tab warnings {tabWarnings}/3</span><span className="hidden sm:inline">DuecIt // every match is a lesson</span></footer>
       </div>
     </AntiCapture>
   );

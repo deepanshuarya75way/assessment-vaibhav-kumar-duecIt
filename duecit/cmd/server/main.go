@@ -65,7 +65,7 @@ func main() {
 			duelMgr.OnUserConnected(uid)
 		}
 	})
-	mmSvc := matchmaking.NewService(cfg, rdb, probSvc, duelMgr, hub)
+	mmSvc := matchmaking.NewService(cfg, rdb, db.Collection("users"), probSvc, duelMgr, hub)
 	mmSvc.StartPoller(context.Background())
 	duelMgr.StartRecoveryPoller(context.Background())
 
@@ -111,6 +111,7 @@ func main() {
 				mr.Post("/queue/join", h.JoinQueue)
 				mr.Post("/queue/leave", h.LeaveQueue)
 				mr.Get("/queue/status", h.QueueStatus)
+				mr.Get("/queue/stats", h.QueueStats)
 				mr.Get("/pending", h.GetPendingMatch)
 				mr.Get("/active", h.GetActiveMatch)
 				mr.Get("/{id}/details", h.GetMatchDetails)

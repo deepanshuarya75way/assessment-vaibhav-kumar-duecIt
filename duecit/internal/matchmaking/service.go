@@ -14,7 +14,9 @@ import (
 	"github.com/duecit/duecit/internal/models"
 	"github.com/duecit/duecit/internal/problems"
 	"github.com/redis/go-redis/v9"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type QueueEntry struct {
@@ -29,14 +31,30 @@ type QueueEntry struct {
 }
 
 type JoinResult struct {
-	Queue    *QueueEntry             `json:"queue,omitempty"`
-	Match    *duel.MatchFoundPayload `json:"match,omitempty"`
-	InQueue  bool                    `json:"inQueue"`
+	Queue   *QueueEntry             `json:"queue,omitempty"`
+	Match   *duel.MatchFoundPayload `json:"match,omitempty"`
+	InQueue bool                    `json:"inQueue"`
+}
+
+type DifficultyStats struct {
+	Difficulty         string `json:"difficulty"`
+	TotalQueued        int64  `json:"totalQueued"`
+	CompetitiveQueued  int64  `json:"competitiveQueued"`
+	PracticeQueued     int64  `json:"practiceQueued"`
+	EstimatedWaitSec   int64  `json:"estimatedWaitSec"`
+	PracticeBotTimeout int    `json:"practiceBotTimeoutSec"`
+}
+
+type QueueStats struct {
+	Category     string            `json:"category"`
+	TotalQueued  int64             `json:"totalQueued"`
+	ByDifficulty []DifficultyStats `json:"byDifficulty"`
 }
 
 type Service struct {
 	cfg      *config.Config
 	rdb      *redis.Client
+	users    *mongo.Collection
 	problems *problems.Service
 	duel     *duel.Manager
 	hub      HubEmitter
@@ -46,8 +64,8 @@ type HubEmitter interface {
 	EmitToUser(userID string, eventType string, data interface{})
 }
 
-func NewService(cfg *config.Config, rdb *redis.Client, prob *problems.Service, dm *duel.Manager, hub HubEmitter) *Service {
-	return &Service{cfg: cfg, rdb: rdb, problems: prob, duel: dm, hub: hub}
+func NewService(cfg *config.Config, rdb *redis.Client, users *mongo.Collection, prob *problems.Service, dm *duel.Manager, hub HubEmitter) *Service {
+	return &Service{cfg: cfg, rdb: rdb, users: users, problems: prob, duel: dm, hub: hub}
 }
 
 func (s *Service) StartPoller(ctx context.Context) {
@@ -194,7 +212,13 @@ func (s *Service) GetQueueStatus(ctx context.Context, userID string) (*QueueEntr
 func (s *Service) tryMatch(ctx context.Context, category, difficulty, mode string) {
 	key := queueKey(category, difficulty, mode)
 	members, err := s.rdb.ZRange(ctx, key, 0, -1).Result()
-	if err != nil || len(members) < 2 {
+	if err != nil {
+		return
+	}
+	if len(members) < 2 {
+		if mode == models.ModePractice {
+			s.tryPracticeBotFallback(ctx, key, members, category, difficulty, mode)
+		}
 		return
 	}
 
@@ -220,6 +244,154 @@ func (s *Service) tryMatch(ctx context.Context, category, difficulty, mode strin
 			return
 		}
 	}
+}
+
+func (s *Service) tryPracticeBotFallback(ctx context.Context, key string, members []string, category, difficulty, mode string) {
+	if len(members) == 0 || s.cfg.PracticeBotTimeoutSec <= 0 {
+		return
+	}
+	playerID := members[0]
+	data, err := s.rdb.Get(ctx, fmt.Sprintf("queue:data:%s", playerID)).Bytes()
+	if err != nil {
+		return
+	}
+	var player QueueEntry
+	if json.Unmarshal(data, &player) != nil {
+		return
+	}
+	waited := time.Since(time.UnixMilli(player.JoinedAt))
+	if waited < time.Duration(s.cfg.PracticeBotTimeoutSec)*time.Second {
+		return
+	}
+
+	lockKey := fmt.Sprintf("botmatch:lock:%s", playerID)
+	ok, _ := s.rdb.SetNX(ctx, lockKey, "1", 10*time.Second).Result()
+	if !ok {
+		return
+	}
+	defer s.rdb.Del(ctx, lockKey)
+
+	if _, err := s.rdb.ZRank(ctx, key, playerID).Result(); err == redis.Nil {
+		return
+	}
+
+	bot, err := s.ensureBotUser(ctx, category, difficulty, player.Rating)
+	if err != nil {
+		log.Printf("matchmaking: bot user unavailable: %v", err)
+		return
+	}
+	botRating := bot.RatingDSA
+	if category == models.CategoryDB {
+		botRating = bot.RatingDB
+	}
+	botEntry := QueueEntry{
+		UserID:     bot.ID.Hex(),
+		Username:   bot.Username,
+		Rating:     botRating,
+		Category:   category,
+		Difficulty: difficulty,
+		Mode:       mode,
+		Language:   player.Language,
+		JoinedAt:   time.Now().UnixMilli(),
+	}
+	botData, _ := json.Marshal(botEntry)
+	pipe := s.rdb.Pipeline()
+	pipe.ZAdd(ctx, key, redis.Z{Score: float64(botEntry.JoinedAt), Member: botEntry.UserID})
+	pipe.Set(ctx, fmt.Sprintf("queue:member:%s", botEntry.UserID), botData, time.Minute)
+	pipe.Set(ctx, fmt.Sprintf("queue:data:%s", botEntry.UserID), botData, time.Minute)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return
+	}
+	if err := s.createMatch(ctx, player, botEntry, category, difficulty, mode); err != nil {
+		log.Printf("matchmaking: bot match failed: %v", err)
+		_ = s.rdb.ZRem(ctx, key, botEntry.UserID).Err()
+	}
+}
+
+func (s *Service) ensureBotUser(ctx context.Context, category, difficulty string, playerRating int) (*models.User, error) {
+	username := fmt.Sprintf("duecit-bot-%s", difficulty)
+	var existing models.User
+	if err := s.users.FindOne(ctx, bson.M{"username": username}).Decode(&existing); err == nil {
+		return &existing, nil
+	}
+
+	rating := playerRating
+	if rating <= 0 {
+		rating = 1000
+	}
+	switch difficulty {
+	case "easy":
+		if rating > 1050 {
+			rating = 1050
+		}
+	case "medium":
+		if rating < 950 {
+			rating = 950
+		}
+		if rating > 1300 {
+			rating = 1300
+		}
+	case "hard":
+		if rating < 1150 {
+			rating = 1150
+		}
+	}
+
+	now := time.Now()
+	user := models.User{
+		Username:      username,
+		Email:         fmt.Sprintf("%s@bots.duecit.local", username),
+		RatingDSA:     rating,
+		RatingDB:      rating,
+		MatchesPlayed: 0,
+		Wins:          0,
+		Role:          models.RoleUser,
+		OAuthProvider: "bot",
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	res, err := s.users.InsertOne(ctx, user)
+	if err != nil {
+		if err := s.users.FindOne(ctx, bson.M{"username": username}).Decode(&existing); err == nil {
+			return &existing, nil
+		}
+		return nil, err
+	}
+	user.ID = res.InsertedID.(primitive.ObjectID)
+	return &user, nil
+}
+
+func (s *Service) QueueStats(ctx context.Context, category string) (*QueueStats, error) {
+	if category == "" {
+		category = models.CategoryDSA
+	}
+	if category != models.CategoryDSA && category != models.CategoryDB {
+		return nil, fmt.Errorf("invalid category")
+	}
+
+	stats := &QueueStats{Category: category, ByDifficulty: make([]DifficultyStats, 0, 3)}
+	for _, difficulty := range []string{"easy", "medium", "hard"} {
+		competitive, _ := s.rdb.ZCard(ctx, queueKey(category, difficulty, models.ModeCompetitive)).Result()
+		practice, _ := s.rdb.ZCard(ctx, queueKey(category, difficulty, models.ModePractice)).Result()
+		total := competitive + practice
+		stats.TotalQueued += total
+
+		waitSec := int64(12)
+		if total == 0 {
+			waitSec = int64(s.cfg.PracticeBotTimeoutSec)
+		} else if total == 1 {
+			waitSec = int64(s.cfg.PracticeBotTimeoutSec / 2)
+		}
+		stats.ByDifficulty = append(stats.ByDifficulty, DifficultyStats{
+			Difficulty:         difficulty,
+			TotalQueued:        total,
+			CompetitiveQueued:  competitive,
+			PracticeQueued:     practice,
+			EstimatedWaitSec:   waitSec,
+			PracticeBotTimeout: s.cfg.PracticeBotTimeoutSec,
+		})
+	}
+	return stats, nil
 }
 
 func (s *Service) findOpponent(player QueueEntry, candidates []QueueEntry) *QueueEntry {
@@ -276,8 +448,10 @@ func (s *Service) createMatch(ctx context.Context, p1, p2 QueueEntry, category, 
 		CodingPhaseSec: s.cfg.CodingPhaseSeconds,
 		PlayerAName:    p1.Username,
 		PlayerARating:  p1.Rating,
+		PlayerAIsBot:   strings.HasPrefix(p1.Username, "duecit-bot-"),
 		PlayerBName:    p2.Username,
 		PlayerBRating:  p2.Rating,
+		PlayerBIsBot:   strings.HasPrefix(p2.Username, "duecit-bot-"),
 	})
 	if err != nil {
 		return err

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Database, Activity, Users, Zap, FileCode,
   Plus, Trash2, Edit2, Upload, X, ChevronDown, ChevronUp,
-  AlertTriangle, CheckCircle2, Clock,
+  AlertTriangle, CheckCircle2, Clock, LogOut,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import {
@@ -251,7 +251,7 @@ const DIFF_MAP: Record<string, string> = {
 
 /*  Main AdminPage  */
 export default function AdminPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('monitor');
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -284,6 +284,11 @@ export default function AdminPage() {
     try { const [s, m] = await Promise.all([api.adminStats(), api.adminActiveMatches()]); setStats(s); setActiveMatches(m || []); }
     catch (err) { setError(err instanceof Error ? err.message : 'Failed to load stats'); }
   }
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
   async function loadProblems() {
     try { const list = await api.listProblems() as Problem[]; setProblems(list || []); }
     catch (err) { setError(err instanceof Error ? err.message : 'Failed to load problems'); }
@@ -401,6 +406,13 @@ export default function AdminPage() {
         <div className="px-4 py-4 border-t border-[var(--border)]">
           <p className="text-xs text-muted">Signed in as</p>
           <p className="text-sm font-semibold text-secondary truncate">{user.username}</p>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-semibold text-secondary transition-colors hover:border-[var(--error)] hover:bg-[var(--error-dim)] hover:text-[var(--error)]"
+          >
+            <LogOut size={14} /> Logout
+          </button>
         </div>
       </div>
 
@@ -687,9 +699,12 @@ export default function AdminPage() {
             <FTextArea label="Expected Output" value={tcForm.expectedOutput} onChange={(v) => setTCForm({ ...tcForm, expectedOutput: v })} required />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <FSelect label="Size Bucket" value={tcForm.sizeBucket} onChange={(v) => setTCForm({ ...tcForm, sizeBucket: v })} options={['small', 'medium', 'large']} />
+            <FSelect label="Size Bucket" value={tcForm.sizeBucket} onChange={(v) => setTCForm({ ...tcForm, sizeBucket: v })} options={['small', 'medium', 'large', 'edge', 'stress', 'tle', 'memory']} />
             <FInput label="Weight" value={String(tcForm.weight)} onChange={(v) => setTCForm({ ...tcForm, weight: parseInt(v) || 10 })} />
           </div>
+          <p className="text-xs text-muted">
+            Use edge/stress/tle/memory buckets for hidden cases that target boundary logic, slow algorithms, or heavy input.
+          </p>
           <label className="flex items-center gap-2.5 text-sm text-secondary cursor-pointer">
             <input type="checkbox" checked={tcForm.isHidden} onChange={(e) => setTCForm({ ...tcForm, isHidden: e.target.checked })}
               className="w-4 h-4 rounded accent-[#3B82F6]" />

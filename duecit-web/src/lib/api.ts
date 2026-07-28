@@ -62,6 +62,21 @@ export interface ActiveMatch {
   startTime: string;
 }
 
+export interface QueueDifficultyStats {
+  difficulty: string;
+  totalQueued: number;
+  competitiveQueued: number;
+  practiceQueued: number;
+  estimatedWaitSec: number;
+  practiceBotTimeoutSec: number;
+}
+
+export interface QueueStats {
+  category: string;
+  totalQueued: number;
+  byDifficulty: QueueDifficultyStats[];
+}
+
 export interface ProblemImportItemResult {
   problemId: string;
   title: string;
@@ -175,6 +190,9 @@ export const api = {
 
   getQueueStatus: () =>
     request<{ entry: Record<string, unknown>; position: number }>('/api/match/queue/status'),
+
+  getQueueStats: (category = 'dsa') =>
+    request<QueueStats>(`/api/match/queue/stats?category=${encodeURIComponent(category)}`),
 
   getMatchDetails: (id: string) =>
     request<Record<string, unknown>>(`/api/match/${id}/details`),

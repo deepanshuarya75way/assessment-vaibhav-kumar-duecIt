@@ -62,6 +62,14 @@ func TestEvaluateClassifiesPistonResponses(t *testing.T) {
 			passed: false,
 		},
 		{
+			name: "memory limit exceeded",
+			response: pistonResponse{
+				Run: pistonRun{Stderr: "cannot allocate memory", Signal: "SIGKILL"},
+			},
+			want:   VerdictMemoryLimitExceeded,
+			passed: false,
+		},
+		{
 			name: "interpreted syntax error",
 			response: pistonResponse{
 				Run: pistonRun{Stderr: "SyntaxError: invalid syntax", Code: 1},

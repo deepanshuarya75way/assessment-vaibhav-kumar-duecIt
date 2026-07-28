@@ -53,14 +53,17 @@ type CreateMatchInput struct {
 	CodingPhaseSec   int
 	PlayerAName      string
 	PlayerARating    int
+	PlayerAIsBot     bool
 	PlayerBName      string
 	PlayerBRating    int
+	PlayerBIsBot     bool
 }
 
 type OpponentInfo struct {
 	UserID   string `json:"userId"`
 	Username string `json:"username"`
 	Rating   int    `json:"rating"`
+	IsBot    bool   `json:"isBot,omitempty"`
 }
 
 type MatchFoundPayload struct {
@@ -126,14 +129,14 @@ func (m *Manager) CreateMatch(ctx context.Context, in CreateMatchInput) (*models
 
 	payloadA := MatchFoundPayload{
 		MatchID: matchID, YourRole: "playerA", Problem: pub,
-		Opponent: OpponentInfo{UserID: in.PlayerB.Hex(), Username: in.PlayerBName, Rating: in.PlayerBRating},
+		Opponent: OpponentInfo{UserID: in.PlayerB.Hex(), Username: in.PlayerBName, Rating: in.PlayerBRating, IsBot: in.PlayerBIsBot},
 		Mode:     in.Mode, Language: in.Language,
 		ServerTime: serverTime, CodingStartsAt: codingStarts.UnixMilli(), CodingEndsAt: codingEnds.UnixMilli(),
 		ReadPhaseSec: in.ReadPhaseSec, CodingPhaseSec: in.CodingPhaseSec,
 	}
 	payloadB := MatchFoundPayload{
 		MatchID: matchID, YourRole: "playerB", Problem: pub,
-		Opponent: OpponentInfo{UserID: in.PlayerA.Hex(), Username: in.PlayerAName, Rating: in.PlayerARating},
+		Opponent: OpponentInfo{UserID: in.PlayerA.Hex(), Username: in.PlayerAName, Rating: in.PlayerARating, IsBot: in.PlayerAIsBot},
 		Mode:     in.Mode, Language: in.Language,
 		ServerTime: serverTime, CodingStartsAt: codingStarts.UnixMilli(), CodingEndsAt: codingEnds.UnixMilli(),
 		ReadPhaseSec: in.ReadPhaseSec, CodingPhaseSec: in.CodingPhaseSec,
@@ -337,9 +340,77 @@ func (m *Manager) SubmitCode(ctx context.Context, matchID, userID primitive.Obje
 		"totalCount": result.TotalCount, "isFullAC": result.IsFullAC,
 	})
 
-	finished := m.checkBothSubmitted(ctx, matchID)
+	finished := false
+	if match.Mode == models.ModePractice {
+		if botID, ok := m.botOpponentID(ctx, match, userID); ok {
+			_ = m.ensureBotSubmission(ctx, match, botID)
+			finished = m.finalizeMatch(ctx, matchID)
+		}
+	}
+	if !finished {
+		finished = m.checkBothSubmitted(ctx, matchID)
+	}
 
 	return &sub, finished, nil
+}
+
+func (m *Manager) botOpponentID(ctx context.Context, match *models.Match, userID primitive.ObjectID) (primitive.ObjectID, bool) {
+	opponentID := match.PlayerA
+	if userID == match.PlayerA {
+		opponentID = match.PlayerB
+	}
+	var opponent models.User
+	if err := m.users.FindOne(ctx, bson.M{"_id": opponentID}).Decode(&opponent); err != nil {
+		return primitive.NilObjectID, false
+	}
+	return opponentID, opponent.OAuthProvider == "bot"
+}
+
+func (m *Manager) ensureBotSubmission(ctx context.Context, match *models.Match, botID primitive.ObjectID) error {
+	count, _ := m.submissions.CountDocuments(ctx, bson.M{"matchId": match.ID, "userId": botID})
+	if count > 0 {
+		return nil
+	}
+	score := botScore(match.Difficulty)
+	sub := models.Submission{
+		MatchID:         match.ID,
+		UserID:          botID,
+		Code:            "// Practice bot simulated submission",
+		Language:        match.Language,
+		ProblemID:       match.ProblemID,
+		PassedCount:     0,
+		TotalCount:      0,
+		WeightedScore:   score,
+		ExecutionTimeMs: 0,
+		SolveTimeMs:     int64(match.ReadPhaseSec+45) * 1000,
+		TestResults:     []models.TestResult{},
+		Verdict:         "BOT",
+		IsFinal:         true,
+		IsFullAC:        false,
+		SubmittedAt:     time.Now(),
+	}
+	res, err := m.submissions.InsertOne(ctx, sub)
+	if err != nil {
+		return err
+	}
+	_, err = m.matches.UpdateOne(ctx, bson.M{"_id": match.ID}, bson.M{
+		"$push": bson.M{"submissions": res.InsertedID},
+		"$set":  bson.M{"updatedAt": time.Now()},
+	})
+	return err
+}
+
+func botScore(difficulty string) float64 {
+	switch difficulty {
+	case "easy":
+		return 35
+	case "medium":
+		return 55
+	case "hard":
+		return 72
+	default:
+		return 45
+	}
 }
 
 func (m *Manager) checkBothSubmitted(ctx context.Context, matchID primitive.ObjectID) bool {
@@ -435,7 +506,10 @@ func (m *Manager) finalizeMatch(ctx context.Context, matchID primitive.ObjectID)
 	isDraw := false
 
 	if paOk && pbOk {
-		if paSub.WeightedScore > pbSub.WeightedScore {
+		if paSub.PassedCount == 0 && pbSub.PassedCount == 0 {
+			isDraw = true
+			winnerID, loserID = match.PlayerA, match.PlayerB
+		} else if paSub.WeightedScore > pbSub.WeightedScore {
 			winnerID, loserID = match.PlayerA, match.PlayerB
 		} else if pbSub.WeightedScore > paSub.WeightedScore {
 			winnerID, loserID = match.PlayerB, match.PlayerA
@@ -501,33 +575,41 @@ func (m *Manager) finalizeMatch(ctx context.Context, matchID primitive.ObjectID)
 		}
 	}
 
-	m.matches.UpdateOne(ctx, bson.M{"_id": matchID}, bson.M{"$set": bson.M{
+	updateSet := bson.M{
 		"status":        models.MatchStatusFinished,
 		"phase":         models.PhaseFinished,
-		"winner":        winnerID,
 		"isDraw":        isDraw,
 		"endTime":       now,
 		"ratingChanges": ratingChanges,
 		"updatedAt":     now,
-	}})
+	}
+	update := bson.M{"$set": updateSet}
+	if isDraw {
+		update["$unset"] = bson.M{"winner": ""}
+	} else {
+		updateSet["winner"] = winnerID
+	}
+	m.matches.UpdateOne(ctx, bson.M{"_id": matchID}, update)
 
 	wUsername := wRes.Username
 	lUsername := lRes.Username
 
-	result := MatchResult{
-		Draw: isDraw,
-		Winner: &PlayerResult{
+	result := MatchResult{Draw: isDraw}
+	if isDraw {
+		result.Reason = "no passed tests"
+	} else {
+		result.Winner = &PlayerResult{
 			UserID: winnerID.Hex(), Username: wUsername,
 			Code: wSub.Code, Language: wSub.Language,
 			Score: wSub.WeightedScore, SolveTimeMs: wSub.SolveTimeMs,
 			RatingChange: wRes.Change, NewRating: wRes.NewRating,
-		},
-		Loser: &PlayerResult{
+		}
+		result.Loser = &PlayerResult{
 			UserID: loserID.Hex(), Username: lUsername,
 			Code: lSub.Code, Language: lSub.Language,
 			Score: lSub.WeightedScore, SolveTimeMs: lSub.SolveTimeMs,
 			RatingChange: lRes.Change, NewRating: lRes.NewRating,
-		},
+		}
 	}
 	m.emitToMatchPlayers(match, "match:finished", result)
 	m.clearUserQueueState(ctx, match.PlayerA.Hex())
@@ -671,7 +753,7 @@ func (m *Manager) GetMatchDetails(ctx context.Context, matchID, userID primitive
 		MatchID:        match.ID.Hex(),
 		YourRole:       role,
 		Problem:        m.problemPublicWithSamples(ctx, problem),
-		Opponent:       OpponentInfo{UserID: opponent.ID.Hex(), Username: opponent.Username, Rating: rating},
+		Opponent:       OpponentInfo{UserID: opponent.ID.Hex(), Username: opponent.Username, Rating: rating, IsBot: opponent.OAuthProvider == "bot"},
 		Mode:           match.Mode,
 		Language:       match.Language,
 		Phase:          phase,
@@ -741,7 +823,7 @@ func (m *Manager) buildMatchFoundPayload(ctx context.Context, match *models.Matc
 		MatchID:        match.ID.Hex(),
 		YourRole:       role,
 		Problem:        m.problemPublicWithSamples(ctx, problem),
-		Opponent:       OpponentInfo{UserID: opponent.ID.Hex(), Username: opponent.Username, Rating: rating},
+		Opponent:       OpponentInfo{UserID: opponent.ID.Hex(), Username: opponent.Username, Rating: rating, IsBot: opponent.OAuthProvider == "bot"},
 		Mode:           match.Mode,
 		Language:       match.Language,
 		ServerTime:     time.Now().UnixMilli(),
@@ -849,7 +931,11 @@ func (m *Manager) GetMatchResult(ctx context.Context, matchID, userID primitive.
 		return nil, fmt.Errorf("match not finished")
 	}
 	if match.IsDraw && match.Winner == nil {
-		return &MatchResult{Draw: true, Reason: "timeout"}, nil
+		reason := "draw"
+		if len(match.Submissions) == 0 {
+			reason = "timeout"
+		}
+		return &MatchResult{Draw: true, Reason: reason}, nil
 	}
 
 	cur, err := m.submissions.Find(ctx, bson.M{"matchId": matchID})

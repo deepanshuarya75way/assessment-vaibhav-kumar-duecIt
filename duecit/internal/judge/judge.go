@@ -32,6 +32,7 @@ const (
 	VerdictCompilationError    = "CE"
 	VerdictRuntimeError        = "RE"
 	VerdictTimeLimitExceeded   = "TLE"
+	VerdictMemoryLimitExceeded = "MLE"
 	VerdictEngineError         = "ENGINE_ERROR"
 	VerdictUnsupportedLanguage = "UNSUPPORTED_LANGUAGE"
 )
@@ -248,6 +249,18 @@ func (s *Service) runTest(ctx context.Context, code, language string, tc models.
 		}
 	}
 
+	if isMemoryLimitRun(pr.Run) {
+		return models.TestResult{
+			Passed:         false,
+			Verdict:        VerdictMemoryLimitExceeded,
+			Input:          tc.Input,
+			ExpectedOutput: tc.ExpectedOutput,
+			ActualOutput:   stdout,
+			ExecutionTime:  time.Since(start).Milliseconds(),
+			Error:          "memory limit exceeded",
+		}
+	}
+
 	if pr.Run.Code != 0 || pr.Run.Signal != "" {
 		verdict := VerdictRuntimeError
 		if isInterpretedSyntaxError(language, pr.Run) {
@@ -334,11 +347,22 @@ func isDeadlineError(err error) bool {
 }
 
 func isTimeoutRun(run pistonRun) bool {
+	if isMemoryLimitRun(run) {
+		return false
+	}
 	text := strings.ToLower(firstNonEmpty(run.Stderr, run.Output, run.Signal))
 	if strings.Contains(text, "time limit") || strings.Contains(text, "timed out") || strings.Contains(text, "timeout") {
 		return true
 	}
 	return run.Signal == "SIGKILL" || run.Signal == "SIGTERM"
+}
+
+func isMemoryLimitRun(run pistonRun) bool {
+	text := strings.ToLower(firstNonEmpty(run.Stderr, run.Output, run.Signal))
+	return strings.Contains(text, "memory") ||
+		strings.Contains(text, "out of memory") ||
+		strings.Contains(text, "cannot allocate memory") ||
+		strings.Contains(text, "allocation failed")
 }
 
 func isInterpretedSyntaxError(language string, run pistonRun) bool {
@@ -374,6 +398,11 @@ func overallVerdict(results []models.TestResult) string {
 	for _, r := range results {
 		if r.Verdict == VerdictTimeLimitExceeded {
 			return VerdictTimeLimitExceeded
+		}
+	}
+	for _, r := range results {
+		if r.Verdict == VerdictMemoryLimitExceeded {
+			return VerdictMemoryLimitExceeded
 		}
 	}
 	for _, r := range results {

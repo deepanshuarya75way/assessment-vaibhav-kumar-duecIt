@@ -23,6 +23,7 @@ type Config struct {
 	PistonAuthPass         string
 	ReadPhaseSeconds       int
 	CodingPhaseSeconds     int
+	PracticeBotTimeoutSec  int
 	EloRange               int
 	DisconnectGraceSeconds int
 	FrontendURL            string
@@ -60,6 +61,7 @@ func Load() *Config {
 		PistonAuthPass:         getEnv("PISTON_AUTH_PASS", ""),
 		ReadPhaseSeconds:       getEnvInt("READ_PHASE_SECONDS", 45),
 		CodingPhaseSeconds:     getEnvInt("CODING_PHASE_SECONDS", 600),
+		PracticeBotTimeoutSec:  getEnvInt("PRACTICE_BOT_TIMEOUT_SECONDS", 25),
 		EloRange:               getEnvInt("ELO_RANGE", 200),
 		DisconnectGraceSeconds: getEnvInt("DISCONNECT_GRACE_SECONDS", 60),
 		FrontendURL:            getEnv("FRONTEND_URL", "http://localhost:3000"),

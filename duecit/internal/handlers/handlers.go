@@ -304,6 +304,16 @@ func (h *Handlers) QueueStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handlers) QueueStats(w http.ResponseWriter, r *http.Request) {
+	category := r.URL.Query().Get("category")
+	stats, err := h.Matchmaking.QueueStats(r.Context(), category)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, "Queue stats", stats)
+}
+
 func (h *Handlers) GetMatch(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 	id, err := primitive.ObjectIDFromHex(chi.URLParam(r, "id"))

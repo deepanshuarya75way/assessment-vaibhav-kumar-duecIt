@@ -15,37 +15,21 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   metadataBase: new URL("https://duecit-web.vercel.app"),
 
-  title: "DuecIt — Real-Time Coding Duels",
+  title: "DuecIt — Code. Duel. Improve.",
   description:
-    "Compete in real-time coding duels based on your ELO rating.",
+    "Practice coding, challenge developers in real-time duels, and climb the ELO leaderboard.",
+
 
   openGraph: {
-    title: "DuecIt — Real-Time Coding Duels",
+    title: "DuecIt — Code. Duel. Improve.",
     description:
-      "Compete in real-time coding duels based on your ELO rating.",
-    url: "https://duecit-web.vercel.app",
-    siteName: "DuecIt",
-    type: "website",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "DuecIt",
-      },
-    ],
+      "Practice coding, challenge developers in real-time duels, and climb the ELO leaderboard.",
+    images: ["/og-image.png"],
   },
 
   twitter: {
     card: "summary_large_image",
-    title: "DuecIt — Real-Time Coding Duels",
-    description:
-      "Compete in real-time coding duels based on your ELO rating.",
     images: ["/og-image.png"],
-  },
-
-  icons: {
-    icon: "/favicon.ico",
   },
 };
 

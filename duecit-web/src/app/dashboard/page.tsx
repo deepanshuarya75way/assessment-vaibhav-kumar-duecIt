@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, BarChart3, CircleUserRound, History, Settings2, Terminal, X } from 'lucide-react';
+import { Activity, BarChart3, CircleUserRound, History, Terminal, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -193,7 +193,13 @@ export default function DashboardPage() {
       <aside className="fixed bottom-0 left-0 top-14 z-20 hidden w-[236px] flex-col border-r border-[var(--border)] bg-[var(--panel)] lg:flex">
         <div className="border-b border-[var(--border)] px-5 py-5"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)]">workspace</p><p className="mt-2 flex items-center gap-2 font-mono text-[12px] text-[var(--accent)]"><Terminal size={13} /> /arena</p></div>
         <nav className="flex-1 space-y-1 p-3" aria-label="Workspace navigation">
-          {[[Activity, '/arena', 'arena'], [History, '#history', 'history'], [CircleUserRound, `/profile/${user.username}`, 'profile'], {/*[Settings2, '#settings', 'settings']*/}].map(([Icon, href, label]) => <Link key={label as string} href={href as string} className={`flex items-center gap-3 border-l-2 px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.1em] no-underline ${label === 'arena' ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'}`}><Icon size={14} /> /{label}</Link>)}
+          {([
+            [Activity, '/arena', 'arena'],
+            [History, '#history', 'history'],
+            [CircleUserRound, `/profile/${user.username}`, 'profile'],
+          ] as [React.ElementType, string, string][]).map(([Icon, href, label]) => (
+            <Link key={label} href={href} className={`flex items-center gap-3 border-l-2 px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.1em] no-underline ${label === 'arena' ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'}`}><Icon size={14} /> /{label}</Link>
+          ))}
         </nav>
         <div className="border-t border-[var(--border)] p-4 font-mono text-[10px] text-[var(--text-muted)]"><p className="flex items-center gap-2 text-[var(--accent)]"><span className="live-dot" /> api connected</p><p className="mt-3">latency live · queue synced</p><p className="mt-4 uppercase tracking-[0.12em]">session</p><p className="mt-1 text-[var(--text)]">@{user.username}</p></div>
       </aside>

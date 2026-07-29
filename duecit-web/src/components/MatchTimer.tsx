@@ -14,17 +14,19 @@ export default function MatchTimer({ serverTime, targetTime, label, onExpire }: 
 
   useEffect(() => {
     const clockOffset = serverTime - Date.now();
-
+    let expired = false;
     const tick = () => {
       const now = Date.now() + clockOffset;
-      const rem = Math.max(0, Math.floor((targetTime - now) / 1000));
-      setRemaining(rem);
-      if (rem === 0 && onExpire) onExpire();
+      const next = Math.max(0, Math.floor((targetTime - now) / 1000));
+      setRemaining(next);
+      if (next === 0 && !expired) {
+        expired = true;
+        onExpire?.();
+      }
     };
-
     tick();
-    const id = setInterval(tick, 250);
-    return () => clearInterval(id);
+    const id = window.setInterval(tick, 250);
+    return () => window.clearInterval(id);
   }, [serverTime, targetTime, onExpire]);
 
   const mins = Math.floor(remaining / 60);
@@ -32,17 +34,13 @@ export default function MatchTimer({ serverTime, targetTime, label, onExpire }: 
   const urgent = remaining <= 60 && label === 'Code';
 
   return (
-    <div
-      className={`px-3 py-1 font-mono text-sm border ${
-        urgent
-          ? 'bg-red-100 border-red-400 text-red-700'
-          : 'bg-white border-[var(--cf-border)] text-[var(--cf-blue)]'
-      }`}
+    <time
+      dateTime={`PT${remaining}S`}
+      aria-label={`${label} time remaining ${mins} minutes ${secs} seconds`}
+      className={`border px-2 py-1 font-mono text-sm font-semibold ${urgent ? 'border-[var(--danger)] bg-[var(--danger-soft)] text-[var(--danger)]' : 'border-[var(--border)] bg-[var(--panel-raised)] text-[var(--accent)]'}`}
     >
-      <span className="text-[var(--cf-muted)] mr-1">{label}:</span>
-      <span className="font-bold">
-        {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
-      </span>
-    </div>
+      <span className="mr-1 text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">{label}</span>
+      {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+    </time>
   );
 }

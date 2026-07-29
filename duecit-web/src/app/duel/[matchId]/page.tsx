@@ -172,6 +172,7 @@ export default function DuelPage() {
   const [resultsPanelMode, setResultsPanelMode] = useState<'idle' | 'run' | 'submit'>('idle');
   const [resultsPanelOpen, setResultsPanelOpen] = useState(false);
   const [phaseFlash, setPhaseFlash] = useState(false);
+  const [tabWarningMessage, setTabWarningMessage] = useState('');
 
   const loadStarterCode = useCallback((lang: string, problem?: Problem) => {
     const ioMode = computeIoMode(problem, lang);
@@ -278,7 +279,19 @@ export default function DuelPage() {
   useEffect(() => { if (!submitted || results || phase === 'finished') return; const id = setInterval(() => fetchMatchResult().catch(() => {}), 2000); return () => clearInterval(id); }, [submitted, results, phase, fetchMatchResult]);
 
   const handleLanguageChange = (lang: string) => { setLanguage(lang); if (match) loadStarterCode(lang, match.problem); };
-  const handleTabSwitch = useCallback(() => { setTabWarnings((w) => { const next = w + 1; if (next >= 3) alert('Warning: Excessive tab switching may result in forfeit.'); return next; }); }, []);
+  const handleTabSwitch = useCallback(() => {
+    setTabWarnings((warnings) => {
+      const next = warnings + 1;
+      if (next >= 3) setTabWarningMessage('Tab switching limit reached — your match may be forfeited.');
+      else setTabWarningMessage(`Tab switch detected — warning ${next}/3.`);
+      return next;
+    });
+  }, []);
+  useEffect(() => {
+    if (!tabWarningMessage) return;
+    const timeout = window.setTimeout(() => setTabWarningMessage(''), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [tabWarningMessage]);
 
   const handleRun = async () => {
     if (!match) return;
@@ -377,6 +390,13 @@ export default function DuelPage() {
             </motion.div>
           )}
         </AnimatePresence>
+        <AnimatePresence>
+          {tabWarningMessage && (
+            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} role="status" className="fixed left-1/2 top-4 z-[110] -translate-x-1/2 border border-[var(--warning)] bg-[var(--warning-soft)] px-4 py-2 font-mono text-[11px] text-[var(--warning)] shadow-lg">
+              ! {tabWarningMessage}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] bg-[var(--panel)] px-4 lg:px-5">
           <div className="flex min-w-0 items-center gap-3 font-mono text-[11px]"><Link href="/dashboard" className="flex h-7 w-7 shrink-0 items-center justify-center border border-[var(--accent)] text-[var(--accent)] no-underline">&gt;_</Link><span className="font-semibold text-[var(--text)]">DuecIt</span><span className="hidden text-[var(--text-faint)] sm:inline">/ arena / live</span><span className="hidden border-l border-[var(--border)] pl-3 text-[var(--accent)] md:inline">DSA-014</span><span className="truncate text-[var(--text)]">{match.problem.title}</span><span className="hidden border-l border-[var(--border)] pl-3 text-[var(--text-muted)] lg:inline">opponent <span className="text-[var(--text)]">{match.opponent.username}</span> <span className={ratingClass(match.opponent.rating)}>{match.opponent.rating}</span></span></div>
@@ -385,12 +405,12 @@ export default function DuelPage() {
 
         <div className={`flex min-h-8 shrink-0 items-center justify-between border-b px-4 font-mono text-[10px] uppercase tracking-[0.12em] ${editorLocked ? 'border-[var(--warning)] bg-[var(--warning-soft)] text-[var(--warning)]' : 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'}`}><span>{editorLocked ? '▣ read phase / editor locked' : '⌁ coding phase / live sync'}</span><span className="hidden sm:inline">{editorLocked ? '00:45 elapsed' : 'transition complete · 08:32 remaining'}</span></div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[40%_60%]">
-          <div className={`relative min-h-0 border-b border-[var(--border)] lg:border-b-0 lg:border-r ${editorLocked ? 'ring-1 ring-inset ring-[var(--warning)]/20' : ''}`}>
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[40%_60%] lg:overflow-hidden">
+          <div className={`relative min-h-[420px] border-b border-[var(--border)] lg:min-h-0 lg:border-b-0 lg:border-r ${editorLocked ? 'ring-1 ring-inset ring-[var(--warning)]/20' : ''}`}>
             <ProblemPanel title={match.problem.title} statement={match.problem.statement} inputFormat={match.problem.inputFormat} outputFormat={match.problem.outputFormat} constraints={match.problem.constraints} samples={match.problem.samples} difficulty={match.problem.difficulty} watermark={watermark} ioMode={ioMode} signature={match.problem.signature} language={language} solutionSignature={solutionSignature} usesDriver={usesDriver} />
           </div>
-          <div className="flex min-h-0 flex-col bg-[var(--editor-bg)]">
-            <div className="min-h-[340px] flex-1" style={{ height: resultsPanelOpen ? 'calc(100% - 220px)' : 'calc(100% - 46px)' }}><DuelEditor language={language} onLanguageChange={handleLanguageChange} value={code} onChange={setCode} readOnly={editorLocked} onTabSwitch={handleTabSwitch} ioMode={ioMode} rated={rated} signature={match.problem.signature} solutionSignature={solutionSignature} /></div>
+          <div className="flex min-h-[560px] flex-col bg-[var(--editor-bg)] lg:min-h-0">
+            <div className="min-h-[420px] min-w-0 flex-1 lg:min-h-0"><DuelEditor language={language} onLanguageChange={handleLanguageChange} value={code} onChange={setCode} readOnly={editorLocked} onTabSwitch={handleTabSwitch} ioMode={ioMode} rated={rated} signature={match.problem.signature} solutionSignature={solutionSignature} /></div>
             {resultsPanelOpen && <div className="flex h-[220px] shrink-0 flex-col overflow-hidden border-t border-[var(--border)]"><TestResultsPanel verdict={runVerdict} passedCount={runPassedCount} totalCount={runTotalCount} testResults={runDetails || undefined} isRunning={running} isSubmitting={submitting} mode={resultsPanelMode} submittedWaiting={submittedWaiting} /></div>}
             <div className="action-bar"><button onClick={handleRun} disabled={editorLocked || running || submitting} className="run-btn">&gt; run_samples</button><button onClick={handleSubmit} disabled={editorLocked || submitting || submitted} className={`submit-btn ${submitted ? 'submit-btn-done' : ''}`}>{submitting ? '⌛ submitting…' : submitted ? '✓ submitted' : '&gt; submit'}</button>{runResult && <span className="action-status" title={runResult}>{runResult}</span>}{resultsPanelMode !== 'idle' && <button onClick={() => setResultsPanelOpen((o) => !o)} className="ml-auto flex items-center gap-1 border-0 bg-transparent font-mono text-[10px] uppercase text-[var(--text-muted)] hover:text-[var(--accent)]">{resultsPanelOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}{resultsPanelOpen ? 'hide' : 'results'}</button>}</div>
           </div>

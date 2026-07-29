@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} ${typeof window !== 'undefined' ? (window.document.documentElement.classList.contains('dark') ? 'dark' : '') : ''}`} data-theme={typeof window !== 'undefined' ? window.document.documentElement.dataset.theme : ''} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>

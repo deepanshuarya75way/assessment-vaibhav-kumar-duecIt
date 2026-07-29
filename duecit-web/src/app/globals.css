@@ -28,9 +28,9 @@
   --danger: #c83c4b;
   --danger-soft: #ffe3e5;
   --code-bg: #e9eeee;
-  --editor-bg: #0b1015;
-  --editor-chrome: #11181f;
-  --editor-line: #566870;
+  --editor-bg: #ffffff;
+  --editor-chrome: #f3f6f6;
+  --editor-line: #c9d5d5;
   --shadow-sm: 0 1px 0 rgba(16, 32, 37, 0.08);
   --shadow-md: 0 12px 28px rgba(16, 32, 37, 0.12);
   --radius: 0px;
@@ -582,12 +582,19 @@
   }
 
   .md-block {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     color: var(--text);
     font-size: 13px;
     line-height: 1.75;
   }
 
   .md-block p { margin-bottom: 9px; }
+  .md-block pre,
+  .md-block table {
+    max-width: 100%;
+  }
   .md-block ul,
   .md-block ol { margin: 4px 0 9px 20px; }
   .md-block li { margin-bottom: 3px; }

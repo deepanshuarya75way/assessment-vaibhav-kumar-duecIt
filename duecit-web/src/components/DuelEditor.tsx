@@ -8,7 +8,11 @@ import { useTheme } from '@/lib/theme';
 
 const Editor = dynamic(() => import('@monaco-editor/react'), {
   ssr: false,
-  loading: () => <div className="flex h-full items-center justify-center bg-[var(--editor-bg)] font-mono text-xs text-[var(--text-muted)]"><span className="run-spinner mr-2" /> loading solution.py…</div>,
+  loading: () => (
+    <div className="flex h-full items-center justify-center bg-[var(--editor-bg)] font-mono text-xs text-[var(--text-muted)]">
+      <span className="run-spinner mr-2" /> loading solution.py…
+    </div>
+  ),
 });
 
 export const LANGUAGES = [
@@ -35,6 +39,7 @@ const LANG_MAP: Record<string, string> = { python: 'python', javascript: 'javasc
 export default function DuelEditor({ language, onLanguageChange, value, onChange, readOnly = false, onTabSwitch, ioMode = 'raw', rated = false, signature, solutionSignature }: DuelEditorProps) {
   const { theme } = useTheme();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
   const prevLenRef = useRef(0);
   const valueRef = useRef(value);
   const isResettingRef = useRef(false);
@@ -43,8 +48,35 @@ export default function DuelEditor({ language, onLanguageChange, value, onChange
 
   const handleMount: OnMount = useCallback((ed, monaco) => {
     editorRef.current = ed;
+    monacoRef.current = monaco;
+    monaco.editor.defineTheme('duecit-noir', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '52636A' },
+        { token: 'keyword', foreground: 'C792EA' },
+        { token: 'string', foreground: '00FF40' },
+        { token: 'number', foreground: 'F2C14E' },
+        { token: 'delimiter', foreground: 'E7F0F2' },
+      ],
+      colors: {
+        'editor.background': '#0B1015',
+        'editor.foreground': '#E7F0F2',
+        'editorLineNumber.foreground': '#52636A',
+        'editorLineNumber.activeForeground': '#00FF40',
+        'editorCursor.foreground': '#00FF40',
+        'editor.lineHighlightBackground': '#11181F',
+        'editor.selectionBackground': '#07361F',
+        'editorGutter.background': '#0B1015',
+        'editorIndentGuide.background': '#18232B',
+        'editorIndentGuide.activeBackground': '#26343B',
+      },
+    });
+    monaco.editor.setTheme(theme === 'dark' ? 'duecit-noir' : 'light');
+
     ed.onDidPaste(() => ed.trigger('keyboard', 'undo', null));
     ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => { /* paste is intentionally blocked */ });
+    prevLenRef.current = ed.getValue().length;
     ed.onDidChangeModelContent(() => {
       if (isResettingRef.current) return;
       const currentLen = ed.getValue().length;
@@ -58,7 +90,11 @@ export default function DuelEditor({ language, onLanguageChange, value, onChange
         prevLenRef.current = currentLen;
       }
     });
-  }, []);
+  }, [theme]);
+
+  useEffect(() => {
+    if (monacoRef.current) monacoRef.current.editor.setTheme(theme === 'dark' ? 'duecit-noir' : 'light');
+  }, [theme]);
 
   useEffect(() => {
     if (!onTabSwitch) return;
@@ -71,17 +107,17 @@ export default function DuelEditor({ language, onLanguageChange, value, onChange
     <div className="flex h-full min-h-0 flex-col bg-[var(--editor-bg)]">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--editor-chrome)] px-3 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
         <div className="flex h-full items-center gap-4">
-          <span className="flex h-full items-center gap-2 border-b-2 border-[var(--accent)] text-[var(--text)]"><span className="text-[var(--accent)]">{`{}`}</span> solution.py</span>
+          <span className="flex h-full items-center gap-2 border-b-2 border-[var(--accent)] text-[var(--text)]"><span className="text-[var(--accent)]">{'{}'}</span> solution.py</span>
           <span className="hidden items-center gap-2 sm:flex"><span className="text-[var(--text-faint)]">▣</span> tests</span>
         </div>
         <span className="hidden text-[var(--accent)] sm:inline">opponent / 6 lines</span>
       </div>
       <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--border)] px-3 font-mono text-[10px] text-[var(--text-muted)]">
-        <label className="flex items-center gap-2"><span className="text-[var(--text-faint)]">language</span><select className="border border-[var(--border)] bg-[var(--panel-raised)] px-2 py-1 text-[10px] text-[var(--text)] outline-none focus:border-[var(--accent)]" value={language} onChange={(e) => onLanguageChange?.(e.target.value)} disabled={readOnly}>{LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}</select></label>
+        <label className="flex items-center gap-2"><span className="text-[var(--text-faint)]">language</span><select aria-label="Programming language" className="border border-[var(--border)] bg-[var(--panel-raised)] px-2 py-1 text-[10px] text-[var(--text)] outline-none focus:border-[var(--accent)]" value={language} onChange={(e) => onLanguageChange?.(e.target.value)} disabled={readOnly}>{LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}</select></label>
         <span className={readOnly ? 'text-[var(--warning)]' : 'text-[var(--accent)]'}>{readOnly ? 'read phase / editor locked' : ioMode === 'function' ? `synced / ${rated ? 'rated' : 'practice'}` : `synced / no paste / ${rated ? 'rated' : 'practice'}`}</span>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden border-x border-[var(--border)]" onCopy={(e) => !readOnly && e.preventDefault()} onCut={(e) => e.preventDefault()} onPaste={(e) => e.preventDefault()} onContextMenu={(e) => e.preventDefault()}>
-        <Editor height="100%" language={LANG_MAP[language] || 'python'} value={value} onChange={(v) => onChange(v || '')} onMount={handleMount} theme={theme === 'dark' ? 'vs-dark' : 'light'} options={{ readOnly, minimap: { enabled: false }, fontSize: 13, fontFamily: 'JetBrains Mono, Consolas, monospace', scrollBeyondLastLine: false, wordWrap: 'on', contextmenu: false, copyWithSyntaxHighlighting: false, lineNumbers: 'on', renderLineHighlight: 'line', padding: { top: 16, bottom: 16 } }} />
+        <Editor height="100%" language={LANG_MAP[language] || 'python'} value={value} onChange={(v) => onChange(v || '')} onMount={handleMount} theme={theme === 'dark' ? 'duecit-noir' : 'light'} options={{ readOnly, minimap: { enabled: false }, fontSize: 13, fontFamily: 'JetBrains Mono, Consolas, monospace', scrollBeyondLastLine: false, wordWrap: 'on', contextmenu: false, copyWithSyntaxHighlighting: false, lineNumbers: 'on', renderLineHighlight: 'line', padding: { top: 16, bottom: 16 }, automaticLayout: true }} />
       </div>
       <div className="flex shrink-0 items-center justify-between border-t border-[var(--border)] px-3 py-2 font-mono text-[10px] text-[var(--text-muted)]"><span>{ioMode === 'function' ? <><span className="text-[var(--accent)]">function mode</span> · write {solutionSignature || signature?.funcName || 'solve()'} only</> : <>full program mode · stdin → stdout</>}</span><span className="hidden text-[var(--text-faint)] sm:inline">autosave: on</span></div>
     </div>

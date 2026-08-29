@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/duecit/duecit/internal/auth"
 	"github.com/duecit/duecit/internal/duel"
@@ -580,6 +581,86 @@ func (h *Handlers) AdminActiveMatches(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, "Active matches", matches)
+}
+
+func (h *Handlers) AdminListUsers(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := int64(100)
+	if limitStr != "" {
+		var parsed int64
+		if _, err := fmt.Sscan(limitStr, &parsed); err == nil && parsed > 0 && parsed <= 500 {
+			limit = parsed
+		}
+	}
+	users, err := h.Auth.ListUsers(r.Context(), limit)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// Build public view with registration and lastSeen
+	type userRow struct {
+		ID         string  `json:"id"`
+		Username   string  `json:"username"`
+		Email      string  `json:"email"`
+		Role       string  `json:"role"`
+		RatingDSA  int     `json:"ratingDSA"`
+		RatingDB   int     `json:"ratingDB"`
+		CreatedAt  string  `json:"createdAt"`
+		UpdatedAt  string  `json:"updatedAt"`
+		LastSeenAt *string `json:"lastSeenAt,omitempty"`
+		IsOnline   bool    `json:"isOnline"`
+	}
+	out := make([]userRow, 0, len(users))
+	now := primitive.NewObjectID().Timestamp()
+	_ = now
+	for _, u := range users {
+		var lastSeen *string
+		isOnline := false
+		if u.LastSeenAt != nil {
+			s := u.LastSeenAt.Format("2006-01-02T15:04:05Z07:00")
+			lastSeen = &s
+			if time.Since(*u.LastSeenAt) < 5*time.Minute {
+				isOnline = true
+			}
+		} else {
+			// fallback to UpdatedAt
+			s := u.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")
+			// only set if UpdatedAt is not zero; don't expose as lastSeen but allow frontend fallback
+			_ = s
+			if time.Since(u.UpdatedAt) < 5*time.Minute {
+				isOnline = true
+			}
+		}
+		out = append(out, userRow{
+			ID:         u.ID.Hex(),
+			Username:   u.Username,
+			Email:      u.Email,
+			Role:       u.Role,
+			RatingDSA:  u.RatingDSA,
+			RatingDB:   u.RatingDB,
+			CreatedAt:  u.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:  u.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			LastSeenAt: lastSeen,
+			IsOnline:   isOnline,
+		})
+	}
+	response.JSON(w, http.StatusOK, "Users listed", out)
+}
+
+func (h *Handlers) AdminUsageStats(w http.ResponseWriter, r *http.Request) {
+	daysStr := r.URL.Query().Get("days")
+	days := 14
+	if daysStr != "" {
+		if _, err := fmt.Sscan(daysStr, &days); err != nil {
+			days = 14
+		}
+	}
+	stats, err := h.Duel.GetUsageStats(r.Context(), days)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, "Usage stats", stats)
 }
 
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {

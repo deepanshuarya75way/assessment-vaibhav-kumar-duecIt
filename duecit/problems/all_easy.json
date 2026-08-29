@@ -97,6 +97,41 @@
         "isHidden": true,
         "sizeBucket": "large",
         "weight": 50
+      },
+      {
+        "input": "5\n1 2 3 4 5\n9",
+        "expectedOutput": "3 4",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "2\n0 0\n0",
+        "expectedOutput": "0 1",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "4\n3 3 3 3\n6",
+        "expectedOutput": "0 1",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "6\n10 20 30 40 50 60\n100",
+        "expectedOutput": "3 5",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "3\n-1 -2 -3\n-5",
+        "expectedOutput": "1 2",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
       }
     ]
   },
@@ -186,6 +221,41 @@
         "isHidden": true,
         "sizeBucket": "large",
         "weight": 50
+      },
+      {
+        "input": "abcde",
+        "expectedOutput": "edcba",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "A",
+        "expectedOutput": "A",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "racecar",
+        "expectedOutput": "racecar",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "12345",
+        "expectedOutput": "54321",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "DuecIt",
+        "expectedOutput": "tIceuD",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
       }
     ]
   },
@@ -275,6 +345,41 @@
         "isHidden": true,
         "sizeBucket": "large",
         "weight": 50
+      },
+      {
+        "input": "aba",
+        "expectedOutput": "true",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "abc",
+        "expectedOutput": "false",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "abccba",
+        "expectedOutput": "true",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "abca",
+        "expectedOutput": "false",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "abccaa",
+        "expectedOutput": "false",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
       }
     ]
   },
@@ -370,6 +475,41 @@
         "isHidden": true,
         "sizeBucket": "large",
         "weight": 50
+      },
+      {
+        "input": "3\n1 2 3",
+        "expectedOutput": "6",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "4\n-1 -2 -3 -4",
+        "expectedOutput": "-1",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "5\n5 -2 3 -1 2",
+        "expectedOutput": "7",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "1\n-5",
+        "expectedOutput": "-5",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "6\n-2 1 -3 4 -1 2",
+        "expectedOutput": "5",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
       }
     ]
   },
@@ -465,6 +605,41 @@
         "isHidden": true,
         "sizeBucket": "large",
         "weight": 50
+      },
+      {
+        "input": "3\n1 2 3",
+        "expectedOutput": "false",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "5\n5 5 5 5 5",
+        "expectedOutput": "true",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "1\n42",
+        "expectedOutput": "false",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "6\n1 2 3 4 5 6",
+        "expectedOutput": "false",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "4\n2 1 3 4",
+        "expectedOutput": "false",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
       }
     ]
   },
@@ -560,6 +735,41 @@
         "isHidden": true,
         "sizeBucket": "large",
         "weight": 50
+      },
+      {
+        "input": "7\n1 3 1 3 5 5 7",
+        "expectedOutput": "7",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "3\n0 1 0",
+        "expectedOutput": "1",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "5\n1 1 2 2 3",
+        "expectedOutput": "3",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "3\n5 5 7",
+        "expectedOutput": "7",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "7\n0 0 1 1 2 2 3",
+        "expectedOutput": "3",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
       }
     ]
   },
@@ -655,6 +865,41 @@
         "isHidden": true,
         "sizeBucket": "large",
         "weight": 50
+      },
+      {
+        "input": "3\n0 0 1",
+        "expectedOutput": "1 0 0",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "4\n1 2 3 4",
+        "expectedOutput": "1 2 3 4",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "5\n0 0 0 0 1",
+        "expectedOutput": "1 0 0 0 0",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "6\n1 0 2 0 3 0",
+        "expectedOutput": "1 2 3 0 0 0",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "5\n3 0 0 0 0",
+        "expectedOutput": "3 0 0 0 0",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
       }
     ]
   },
@@ -751,6 +996,41 @@
         "isHidden": true,
         "sizeBucket": "large",
         "weight": 50
+      },
+      {
+        "input": "2\n0 1",
+        "expectedOutput": "2",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "5\n0 1 2 3 5",
+        "expectedOutput": "4",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "4\n0 2 3 4",
+        "expectedOutput": "1",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "2\n1 0",
+        "expectedOutput": "2",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "5\n1 0 2 4 5",
+        "expectedOutput": "3",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
       }
     ]
   },
@@ -846,6 +1126,41 @@
         "isHidden": true,
         "sizeBucket": "large",
         "weight": 50
+      },
+      {
+        "input": "abc\ncba",
+        "expectedOutput": "true",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "hello\nheloo",
+        "expectedOutput": "false",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "listen\nsilent",
+        "expectedOutput": "true",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "abc\ndef",
+        "expectedOutput": "false",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "aab\naab",
+        "expectedOutput": "true",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
       }
     ]
   },
@@ -941,6 +1256,41 @@
         "isHidden": true,
         "sizeBucket": "large",
         "weight": 50
+      },
+      {
+        "input": "4\n1 2 3 4",
+        "expectedOutput": "3",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "5\n2 4 1 5 3",
+        "expectedOutput": "4",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "5\n3 3 5 0 0",
+        "expectedOutput": "2",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "6\n2 1 2 0 1 3",
+        "expectedOutput": "3",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
+      },
+      {
+        "input": "3\n1 5 2",
+        "expectedOutput": "4",
+        "sizeBucket": "medium",
+        "weight": 10,
+        "isHidden": true
       }
     ]
   }

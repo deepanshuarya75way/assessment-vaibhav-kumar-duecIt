@@ -62,6 +62,34 @@ export interface ActiveMatch {
   startTime: string;
 }
 
+export interface AdminUserRow {
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+  ratingDSA: number;
+  ratingDB: number;
+  createdAt: string;
+  updatedAt: string;
+  lastSeenAt?: string | null;
+  isOnline: boolean;
+}
+
+export interface DailyCount {
+  date: string;
+  count: number;
+}
+
+export interface UsageStats {
+  days: number;
+  registrationsDaily: DailyCount[];
+  matchesDaily: DailyCount[];
+  submissionsDaily: DailyCount[];
+  usersByRole: Record<string, number>;
+  matchesByStatus: Record<string, number>;
+  problemsByDifficulty: Record<string, number>;
+}
+
 export interface QueueDifficultyStats {
   difficulty: string;
   totalQueued: number;
@@ -247,6 +275,10 @@ export const api = {
   adminStats: () => request<AdminStats>('/api/admin/stats'),
 
   adminActiveMatches: () => request<ActiveMatch[]>('/api/admin/matches/active'),
+
+  adminUsers: (limit = 100) => request<AdminUserRow[]>(`/api/admin/users?limit=${limit}`),
+
+  adminUsageStats: (days = 14) => request<UsageStats>(`/api/admin/usage-stats?days=${days}`),
 };
 
 export { API_URL };

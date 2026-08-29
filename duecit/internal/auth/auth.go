@@ -19,6 +19,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -333,6 +334,32 @@ func (s *Service) GetUser(ctx context.Context, id primitive.ObjectID) (*models.U
 	return &user, nil
 }
 
+func (s *Service) TouchLastSeen(ctx context.Context, id primitive.ObjectID) {
+	now := time.Now()
+	// fire-and-forget style but do synchronously with short timeout to keep LastSeenAt fresh
+	_, _ = s.users.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": bson.M{"lastSeenAt": now}})
+}
+
+func (s *Service) ListUsers(ctx context.Context, limit int64) ([]models.User, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	findOpts := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}}).SetLimit(limit)
+	cur, err := s.users.Find(ctx, bson.M{}, findOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var users []models.User
+	if err := cur.All(ctx, &users); err != nil {
+		return nil, err
+	}
+	if users == nil {
+		users = []models.User{}
+	}
+	return users, nil
+}
+
 type contextKey string
 
 const UserContextKey contextKey = "user"
@@ -365,6 +392,10 @@ func AuthMiddleware(s *Service) func(http.Handler) http.Handler {
 				response.Error(w, http.StatusUnauthorized, "User not found")
 				return
 			}
+			// update lastSeenAt asynchronously without blocking the request
+			go s.TouchLastSeen(context.Background(), user.ID)
+			now := time.Now()
+			user.LastSeenAt = &now
 			ctx := context.WithValue(r.Context(), UserContextKey, user)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

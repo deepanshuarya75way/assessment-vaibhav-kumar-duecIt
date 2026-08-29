@@ -1087,6 +1087,21 @@ type AdminStats struct {
 	TotalProblems int64 `json:"totalProblems"`
 }
 
+type UsageStats struct {
+	Days               int              `json:"days"`
+	RegistrationsDaily []DailyCount     `json:"registrationsDaily"`
+	MatchesDaily       []DailyCount     `json:"matchesDaily"`
+	SubmissionsDaily   []DailyCount     `json:"submissionsDaily"`
+	UsersByRole        map[string]int64 `json:"usersByRole"`
+	MatchesByStatus    map[string]int64 `json:"matchesByStatus"`
+	ProblemsByDiff     map[string]int64 `json:"problemsByDifficulty"`
+}
+
+type DailyCount struct {
+	Date  string `json:"date"`
+	Count int64  `json:"count"`
+}
+
 type ActiveMatchSummary struct {
 	MatchID    string    `json:"matchId"`
 	ProblemID  string    `json:"problemId"`
@@ -1106,6 +1121,118 @@ func (m *Manager) GetAdminStats(ctx context.Context) (*AdminStats, error) {
 		ActiveMatches: active,
 		TotalProblems: problems,
 	}, nil
+}
+
+func (m *Manager) GetUsageStats(ctx context.Context, days int) (*UsageStats, error) {
+	if days <= 0 || days > 90 {
+		days = 14
+	}
+	now := time.Now()
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -(days - 1))
+
+	regs := m.dailyCounts(ctx, m.users, "createdAt", start, days)
+	matches := m.dailyCounts(ctx, m.matches, "createdAt", start, days)
+	subs := m.dailyCounts(ctx, m.submissions, "submittedAt", start, days)
+
+	// users by role
+	usersByRole := map[string]int64{}
+	if cur, err := m.users.Aggregate(ctx, mongo.Pipeline{
+		{{Key: "$group", Value: bson.D{{Key: "_id", Value: "$role"}, {Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}}}}},
+	}); err == nil {
+		defer cur.Close(ctx)
+		for cur.Next(ctx) {
+			var doc struct {
+				ID    *string `bson:"_id"`
+				Count int64   `bson:"count"`
+			}
+			if err := cur.Decode(&doc); err == nil {
+				key := "user"
+				if doc.ID != nil && *doc.ID != "" {
+					key = *doc.ID
+				}
+				usersByRole[key] = doc.Count
+			}
+		}
+	}
+	// matches by status
+	matchesByStatus := map[string]int64{}
+	if cur, err := m.matches.Aggregate(ctx, mongo.Pipeline{
+		{{Key: "$group", Value: bson.D{{Key: "_id", Value: "$status"}, {Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}}}}},
+	}); err == nil {
+		defer cur.Close(ctx)
+		for cur.Next(ctx) {
+			var doc struct {
+				ID    *string `bson:"_id"`
+				Count int64   `bson:"count"`
+			}
+			if err := cur.Decode(&doc); err == nil && doc.ID != nil {
+				matchesByStatus[*doc.ID] = doc.Count
+			}
+		}
+	}
+	// problems by difficulty
+	probsByDiff := map[string]int64{}
+	if cur, err := m.matches.Aggregate(ctx, mongo.Pipeline{
+		{{Key: "$group", Value: bson.D{{Key: "_id", Value: "$difficulty"}, {Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}}}}},
+	}); err == nil {
+		_ = cur
+		// this is for matches difficulty; instead query problems collection directly
+		cur.Close(ctx)
+	}
+	if probCur, err := m.problems.AggregateProblemsByDifficulty(ctx); err == nil {
+		probsByDiff = probCur
+	}
+
+	return &UsageStats{
+		Days:               days,
+		RegistrationsDaily: regs,
+		MatchesDaily:       matches,
+		SubmissionsDaily:   subs,
+		UsersByRole:        usersByRole,
+		MatchesByStatus:    matchesByStatus,
+		ProblemsByDiff:     probsByDiff,
+	}, nil
+}
+
+func (m *Manager) dailyCounts(ctx context.Context, coll *mongo.Collection, field string, start time.Time, days int) []DailyCount {
+	// Build map date->count via aggregation grouped by YYYY-MM-DD
+	end := start.AddDate(0, 0, days)
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.D{{Key: field, Value: bson.D{{Key: "$gte", Value: start}, {Key: "$lt", Value: end}}}}}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: bson.D{{Key: "$dateToString", Value: bson.D{{Key: "format", Value: "%Y-%m-%d"}, {Key: "date", Value: "$" + field}}}}},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+		{{Key: "$sort", Value: bson.D{{Key: "_id", Value: 1}}}},
+	}
+	cur, err := coll.Aggregate(ctx, pipeline)
+	if err != nil {
+		// fallback: empty but fill days
+		out := make([]DailyCount, days)
+		for i := 0; i < days; i++ {
+			d := start.AddDate(0, 0, i)
+			out[i] = DailyCount{Date: d.Format("2006-01-02"), Count: 0}
+		}
+		return out
+	}
+	defer cur.Close(ctx)
+	countMap := map[string]int64{}
+	for cur.Next(ctx) {
+		var doc struct {
+			ID    string `bson:"_id"`
+			Count int64  `bson:"count"`
+		}
+		if err := cur.Decode(&doc); err == nil {
+			countMap[doc.ID] = doc.Count
+		}
+	}
+	out := make([]DailyCount, days)
+	for i := 0; i < days; i++ {
+		d := start.AddDate(0, 0, i)
+		key := d.Format("2006-01-02")
+		out[i] = DailyCount{Date: key, Count: countMap[key]}
+	}
+	return out
 }
 
 func (m *Manager) ListActiveMatches(ctx context.Context) ([]ActiveMatchSummary, error) {

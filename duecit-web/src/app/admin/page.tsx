@@ -6,11 +6,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Database, Activity, Users, Zap, FileCode,
   Plus, Trash2, Edit2, Upload, X, ChevronDown, ChevronUp,
-  AlertTriangle, CheckCircle2, Clock, LogOut,
+  AlertTriangle, CheckCircle2, Clock, LogOut, BarChart3, Search, RefreshCw, TrendingUp, Calendar,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import {
-  api, AdminStats, ActiveMatch, InputVar, ParamType, PARAM_TYPES, ProblemImportResult,
+  api, AdminStats, ActiveMatch, InputVar, ParamType, PARAM_TYPES, ProblemImportResult, AdminUserRow, UsageStats, DailyCount,
 } from '@/lib/api';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 
@@ -32,7 +32,7 @@ interface Problem {
   testCases?: TestCaseInput[];
 }
 
-type Tab = 'monitor' | 'problems';
+type Tab = 'monitor' | 'users' | 'analytics' | 'problems';
 
 const emptyProblemForm = (): Partial<Problem> => ({
   category: 'dsa', difficulty: 'easy', tags: [], samples: [{ input: '', output: '' }],
@@ -242,6 +242,44 @@ function DriverCodeBuilder({ driverCode, onChange }: { driverCode: Record<string
   );
 }
 
+/*  Usage Bar Chart  */
+function UsageBarChart({ title, data, color, icon }: { title: string; data: DailyCount[]; color: string; icon?: React.ReactNode }) {
+  const max = Math.max(1, ...data.map(d => d.count));
+  return (
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        {icon}
+        <h3 className="font-bold text-primary text-sm">{title}</h3>
+        <span className="ml-auto text-xs text-muted">{data.reduce((a,b)=>a+b.count,0)} total · max {max}/day</span>
+      </div>
+      <div className="flex items-end gap-1 h-32">
+        {data.map((d, i) => {
+          const h = max ? (d.count / max) * 100 : 0;
+          const label = d.date.slice(5);
+          return (
+            <div key={d.date} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+              <div className="w-full flex justify-center" style={{ height: '96px' }}>
+                <motion.div
+                  initial={{ height: 0 }}
+                  animate={{ height: `${h}%` }}
+                  transition={{ delay: i * 0.02, duration: 0.4 }}
+                  className="w-full rounded-t-lg flex items-start justify-center pt-1 text-[10px] font-bold text-white"
+                  style={{ background: color, alignSelf: 'flex-end', minHeight: d.count ? '12px' : '2px', opacity: d.count ? 1 : 0.2 }}
+                  title={`${d.date}: ${d.count}`}
+                >
+                  {d.count > 0 && h > 18 ? d.count : ''}
+                </motion.div>
+              </div>
+              <span className="text-[9px] text-muted font-mono rotate-0 truncate w-full text-center" title={d.date}>{label}</span>
+            </div>
+          );
+        })}
+      </div>
+      {data.every(d=>d.count===0) && <p className="text-xs text-muted text-center mt-2">No data in this period</p>}
+    </div>
+  );
+}
+
 /*  Diff badge  */
 const DIFF_MAP: Record<string, string> = {
   easy:   'text-[var(--success)] bg-[var(--success-dim)] border-[color-mix(in_srgb,var(--success)_20%,transparent)]',
@@ -269,12 +307,18 @@ export default function AdminPage() {
   const [importText, setImportText] = useState('');
   const [importResult, setImportResult] = useState<ProblemImportResult | null>(null);
   const [error, setError] = useState('');
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
+  const [usersSearch, setUsersSearch] = useState('');
+  const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
+  const [usageDays, setUsageDays] = useState(14);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usageLoading, setUsageLoading] = useState(false);
 
   useEffect(() => { if (!loading && (!user || user.role !== 'admin')) router.push('/login'); }, [user, loading, router]);
 
   useEffect(() => {
     if (user?.role === 'admin') {
-      loadMonitor(); loadProblems();
+      loadMonitor(); loadProblems(); loadUsers(); loadUsage(usageDays);
       const id = setInterval(loadMonitor, 10000);
       return () => clearInterval(id);
     }
@@ -283,6 +327,15 @@ export default function AdminPage() {
   async function loadMonitor() {
     try { const [s, m] = await Promise.all([api.adminStats(), api.adminActiveMatches()]); setStats(s); setActiveMatches(m || []); }
     catch (err) { setError(err instanceof Error ? err.message : 'Failed to load stats'); }
+  }
+
+  async function loadUsers() {
+    setUsersLoading(true);
+    try { const list = await api.adminUsers(200); setUsers(list || []); } catch (err) { setError(err instanceof Error ? err.message : 'Failed to load users'); } finally { setUsersLoading(false); }
+  }
+  async function loadUsage(days: number) {
+    setUsageLoading(true);
+    try { const u = await api.adminUsageStats(days); setUsageStats(u); } catch (err) { setError(err instanceof Error ? err.message : 'Failed to load usage'); } finally { setUsageLoading(false); }
   }
 
   const handleLogout = () => {
@@ -368,10 +421,35 @@ export default function AdminPage() {
 
   if (loading || !user) return <FullPageSpinner />;
 
-  const SIDEBAR = [
-    { id: 'monitor'  as Tab, label: 'Monitor',  icon: <Activity size={16} /> },
-    { id: 'problems' as Tab, label: 'Problems',  icon: <Database size={16} /> },
+  const filteredUsers = users.filter(u => {
+    if (!usersSearch.trim()) return true;
+    const q = usersSearch.toLowerCase();
+    return u.username.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+  });
+
+  const formatDate = (iso: string) => {
+    try { const d = new Date(iso); return d.toLocaleString(); } catch { return iso; }
+  };
+  const formatLastSeen = (u: AdminUserRow) => {
+    if (u.lastSeenAt) return formatDate(u.lastSeenAt);
+    return formatDate(u.updatedAt) + ' (via update)';
+  };
+
+  const SIDEBAR: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: 'monitor'  , label: 'Monitor',  icon: <Activity size={16} /> },
+    { id: 'users'    , label: 'Users',    icon: <Users size={16} /> },
+    { id: 'analytics', label: 'Analytics',icon: <BarChart3 size={16} /> },
+    { id: 'problems' , label: 'Problems',  icon: <Database size={16} /> },
   ];
+
+  const getTabTitle = () => {
+    switch(tab){
+      case 'monitor': return 'Monitor';
+      case 'users': return 'Registered Users';
+      case 'analytics': return 'Platform Usage';
+      case 'problems': return 'Problem Management';
+    }
+  };
 
   return (
     <div className="min-h-screen surface flex">
@@ -421,9 +499,14 @@ export default function AdminPage() {
         <div className="max-w-6xl mx-auto px-6 py-6">
 
           {/* Page header */}
-          <div className="mb-6">
-            <h1 className="text-xl font-bold text-primary">{tab === 'monitor' ? 'Monitor' : 'Problem Management'}</h1>
-            <p className="text-xs text-muted mt-1">Admins cannot enter matchmaking</p>
+          <div className="mb-6 flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-bold text-primary">{getTabTitle()}</h1>
+              <p className="text-xs text-muted mt-1">Admins cannot enter matchmaking</p>
+            </div>
+            {(tab==='users' || tab==='analytics') && (
+              <button onClick={()=>{ loadUsers(); loadUsage(usageDays); loadMonitor(); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl text-xs text-secondary hover:text-primary transition-colors"><RefreshCw size={13}/> Refresh</button>
+            )}
           </div>
 
           {/* Error */}
@@ -492,6 +575,162 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
+            </motion.div>
+          )}
+
+          {/* ── Users tab ── */}
+          {tab === 'users' && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-[var(--border)] flex items-center gap-3 flex-wrap">
+                  <Users size={15} className="text-[var(--primary)]" />
+                  <h2 className="font-bold text-primary text-sm">All Registered Users <span className="text-muted font-normal">({filteredUsers.length}/{users.length})</span></h2>
+                  {usersLoading && <span className="text-xs text-muted ml-2">Loading…</span>}
+                  <div className="ml-auto flex items-center gap-2">
+                    <div className="relative">
+                      <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+                      <input value={usersSearch} onChange={e=>setUsersSearch(e.target.value)} placeholder="Search username or email…"
+                        className="pl-8 pr-3 py-1.5 bg-[var(--bg-input)] border border-[var(--border)] rounded-xl text-xs text-primary placeholder:text-muted outline-none focus:border-[#3B82F6] w-56" />
+                    </div>
+                    <button onClick={loadUsers} className="p-1.5 rounded-lg border border-[var(--border)] text-muted hover:text-primary"><RefreshCw size={13}/></button>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-[var(--bg-input)] border-b border-[var(--border)] text-xs font-semibold text-muted uppercase tracking-wider">
+                        <th className="text-left px-4 py-2.5">Username</th>
+                        <th className="text-left px-4 py-2.5">Email</th>
+                        <th className="text-left px-4 py-2.5">Role</th>
+                        <th className="text-left px-4 py-2.5">Rating DSA/DB</th>
+                        <th className="text-left px-4 py-2.5"><span className="flex items-center gap-1"><Calendar size={11}/>Registered</span></th>
+                        <th className="text-left px-4 py-2.5">Last Online</th>
+                        <th className="text-left px-4 py-2.5">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border)]">
+                      {filteredUsers.map(u => (
+                        <tr key={u.id} className="hover:bg-[color-mix(in_srgb,var(--text)_2%,transparent)] transition-colors">
+                          <td className="px-4 py-3 font-semibold text-primary">{u.username}</td>
+                          <td className="px-4 py-3 text-secondary text-xs">{u.email}</td>
+                          <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold border capitalize ${u.role==='admin' ? 'text-[var(--purple)] bg-[var(--purple)]/10 border-[var(--purple)]/20' : 'text-secondary bg-[var(--bg-elevated)] border-[var(--border)]'}`}>{u.role}</span></td>
+                          <td className="px-4 py-3 font-mono text-xs text-secondary">{u.ratingDSA} / {u.ratingDB}</td>
+                          <td className="px-4 py-3 text-xs text-muted font-mono" title={u.createdAt}>{formatDate(u.createdAt)}</td>
+                          <td className="px-4 py-3 text-xs text-muted font-mono" title={u.lastSeenAt || u.updatedAt}>{formatLastSeen(u)}</td>
+                          <td className="px-4 py-3">{u.isOnline ? <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--success)]"><span className="w-2 h-2 bg-[var(--success)] rounded-full animate-pulse"/> Online</span> : <span className="text-xs text-muted">Offline</span>}</td>
+                        </tr>
+                      ))}
+                      {filteredUsers.length===0 && (
+                        <tr><td colSpan={7} className="text-center py-10 text-sm text-muted">{usersLoading ? 'Loading users…' : 'No users found'}</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-4 py-3 bg-[var(--bg-input)] border-t border-[var(--border)] text-xs text-muted">
+                  Showing {filteredUsers.length} user(s). Registration date is <code className="bg-[var(--bg-elevated)] px-1 rounded">createdAt</code>, last online is <code className="bg-[var(--bg-elevated)] px-1 rounded">lastSeenAt</code> updated on every authenticated request (online if seen &lt;5 min ago).
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Analytics tab ── */}
+          {tab === 'analytics' && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-sm text-secondary">
+                  <TrendingUp size={16} className="text-[var(--primary)]"/> Platform Usage
+                  {usageLoading && <span className="text-xs text-muted">loading…</span>}
+                </div>
+                <div className="ml-auto flex items-center gap-2">
+                  {[7,14,30].map(d=>(
+                    <button key={d} onClick={()=>{ setUsageDays(d); loadUsage(d); }} className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${usageDays===d ? 'bg-[var(--primary)] text-white border-[var(--primary)]' : 'bg-[var(--bg-card)] text-secondary border-[var(--border)] hover:border-[var(--primary)]'}`}>{d}d</button>
+                  ))}
+                  <button onClick={()=>loadUsage(usageDays)} className="p-1.5 rounded-lg border border-[var(--border)] text-muted hover:text-primary"><RefreshCw size={13}/></button>
+                </div>
+              </div>
+
+              {usageStats ? (
+                <>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <UsageBarChart title="New Registrations / day" data={usageStats.registrationsDaily} color="#3B82F6" icon={<Users size={14} className="text-[#3B82F6]"/>}/>
+                    <UsageBarChart title="Matches Created / day" data={usageStats.matchesDaily} color="#22C55E" icon={<Zap size={14} className="text-[#22C55E]"/>}/>
+                    <UsageBarChart title="Submissions / day" data={usageStats.submissionsDaily} color="#8B5CF6" icon={<FileCode size={14} className="text-[#8B5CF6]"/>}/>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-5">
+                      <h3 className="font-bold text-primary text-sm mb-3 flex items-center gap-2"><Users size={14}/> Users by Role</h3>
+                      <div className="space-y-2">
+                        {Object.entries(usageStats.usersByRole).length===0 ? <p className="text-xs text-muted">No data</p> : Object.entries(usageStats.usersByRole).map(([role,count])=>{
+                          const total = Object.values(usageStats.usersByRole).reduce((a,b)=>a+b,0) || 1;
+                          const pct = Math.round((count/total)*100);
+                          return (
+                            <div key={role} className="flex items-center gap-3">
+                              <span className="text-xs font-semibold text-secondary capitalize w-16">{role}</span>
+                              <div className="flex-1 h-2 bg-[var(--bg-input)] rounded-full overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: role==='admin' ? '#8B5CF6' : '#3B82F6' }} />
+                              </div>
+                              <span className="text-xs font-mono text-muted w-12 text-right">{count} ({pct}%)</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-5">
+                      <h3 className="font-bold text-primary text-sm mb-3 flex items-center gap-2"><Activity size={14}/> Matches by Status</h3>
+                      <div className="space-y-2">
+                        {Object.entries(usageStats.matchesByStatus).length===0 ? <p className="text-xs text-muted">No matches yet</p> : Object.entries(usageStats.matchesByStatus).map(([status,count])=>{
+                          const total = Object.values(usageStats.matchesByStatus).reduce((a,b)=>a+b,0) || 1;
+                          const pct = Math.round((count/total)*100);
+                          const col = status==='active' ? '#22C55E' : status==='finished' ? '#3B82F6' : '#64748B';
+                          return (
+                            <div key={status} className="flex items-center gap-3">
+                              <span className="text-xs font-semibold text-secondary capitalize w-16">{status}</span>
+                              <div className="flex-1 h-2 bg-[var(--bg-input)] rounded-full overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: col }} />
+                              </div>
+                              <span className="text-xs font-mono text-muted w-12 text-right">{count} ({pct}%)</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-5">
+                      <h3 className="font-bold text-primary text-sm mb-3 flex items-center gap-2"><Database size={14}/> Problems by Difficulty</h3>
+                      <div className="space-y-2">
+                        {Object.entries(usageStats.problemsByDifficulty).length===0 ? <p className="text-xs text-muted">No problems</p> : Object.entries(usageStats.problemsByDifficulty).map(([diff,count])=>{
+                          const total = Object.values(usageStats.problemsByDifficulty).reduce((a,b)=>a+b,0) || 1;
+                          const pct = Math.round((count/total)*100);
+                          const col = diff==='easy' ? '#22C55E' : diff==='medium' ? '#F59E0B' : '#EF4444';
+                          return (
+                            <div key={diff} className="flex items-center gap-3">
+                              <span className="text-xs font-semibold capitalize w-16" style={{ color: col }}>{diff}</span>
+                              <div className="flex-1 h-2 bg-[var(--bg-input)] rounded-full overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: col }} />
+                              </div>
+                              <span className="text-xs font-mono text-muted w-12 text-right">{count} ({pct}%)</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-5">
+                    <h3 className="font-bold text-primary text-sm mb-2">How to read these graphs</h3>
+                    <p className="text-xs text-muted leading-relaxed">
+                      Each bar is one day (YYYY-MM-DD). Registrations and matches are aggregated by <code className="bg-[var(--bg-elevated)] px-1 rounded">createdAt</code>.
+                      Submissions by <code className="bg-[var(--bg-elevated)] px-1 rounded">submittedAt</code>. Use the 7/14/30d toggle to change window. Data is live from MongoDB aggregation; refresh to update.
+                      For production you would wire this to a real analytics pipeline — this view already uses the same collections as the rest of the platform.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-10 text-center">
+                  <BarChart3 size={24} className="text-[#374151] mx-auto mb-2"/>
+                  <p className="text-sm text-muted">{usageLoading ? 'Loading usage stats…' : 'No usage data available'}</p>
+                </div>
+              )}
             </motion.div>
           )}
 

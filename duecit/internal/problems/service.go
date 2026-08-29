@@ -360,6 +360,27 @@ func (s *Service) CountProblems(ctx context.Context) (int64, error) {
 	return s.problems.CountDocuments(ctx, bson.M{})
 }
 
+func (s *Service) AggregateProblemsByDifficulty(ctx context.Context) (map[string]int64, error) {
+	cur, err := s.problems.Aggregate(ctx, mongo.Pipeline{
+		{{Key: "$group", Value: bson.D{{Key: "_id", Value: "$difficulty"}, {Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}}}}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	out := map[string]int64{}
+	for cur.Next(ctx) {
+		var doc struct {
+			ID    *string `bson:"_id"`
+			Count int64   `bson:"count"`
+		}
+		if err := cur.Decode(&doc); err == nil && doc.ID != nil {
+			out[*doc.ID] = doc.Count
+		}
+	}
+	return out, nil
+}
+
 // DedupeProblems is a one-time cleanup for databases that already have
 // duplicate problemIds from before this fix (which is almost certainly the
 // case for this app's production database right now). For each problemId

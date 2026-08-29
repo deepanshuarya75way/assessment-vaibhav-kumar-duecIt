@@ -138,6 +138,8 @@ func main() {
 			admin.Delete("/problems/{id}/testcases/{tcId}", h.AdminDeleteTestCase)
 			admin.Get("/stats", h.AdminStats)
 			admin.Get("/matches/active", h.AdminActiveMatches)
+			admin.Get("/users", h.AdminListUsers)
+			admin.Get("/usage-stats", h.AdminUsageStats)
 		})
 	})
 

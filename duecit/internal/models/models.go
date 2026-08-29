@@ -22,6 +22,7 @@ type User struct {
 	RefreshToken   string             `bson:"refreshToken,omitempty" json:"-"`
 	ResetTokenHash string             `bson:"passwordResetTokenHash,omitempty" json:"-"`
 	ResetExpiresAt *time.Time         `bson:"passwordResetExpiresAt,omitempty" json:"-"`
+	LastSeenAt     *time.Time         `bson:"lastSeenAt,omitempty" json:"lastSeenAt,omitempty"`
 	CreatedAt      time.Time          `bson:"createdAt" json:"createdAt"`
 	UpdatedAt      time.Time          `bson:"updatedAt" json:"updatedAt"`
 }

@@ -251,6 +251,7 @@ export default function DuelPage() {
     try {
       const result = await api.getMatchResult(matchId);
       setResults(result); setPhase('finished'); setRunResult('Match completed.');
+      
       sessionStorage.removeItem(`match:${matchId}`);
       return true;
     } catch { return false; }

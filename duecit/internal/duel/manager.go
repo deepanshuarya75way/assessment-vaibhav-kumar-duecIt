@@ -894,10 +894,6 @@ func (m *Manager) recoverActiveMatches(ctx context.Context) {
 		return
 	}
 	defer cur.Close(ctx)
-   
-	if err=nill{
-		continue
-	}
 	for cur.Next(ctx) {
 		var match models.Match
 		if err := cur.Decode(&match); err != nil {

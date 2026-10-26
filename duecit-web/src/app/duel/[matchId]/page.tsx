@@ -15,7 +15,6 @@ import MatchTimer from '@/components/MatchTimer';
 import AntiCapture from '@/components/AntiCapture';
 import TestResultsPanel, { type TestCaseResult } from '@/components/TestResultsPanel';
 
-/* ─── All original logic — unchanged ───────────────────────────────── */
 
 const WRAPPER_SUPPORTED_LANGS = ['python', 'javascript', 'go', 'java', 'cpp', 'c'];
 
@@ -52,9 +51,9 @@ function normalizeProblem(value: unknown): Problem {
   const starterCode = Object.fromEntries(Object.entries(starterRaw).filter((e): e is [string, string] => typeof e[1] === 'string'));
   const inputSpec = Array.isArray(raw.inputSpec)
     ? raw.inputSpec.map((item) => {
-        const v = item && typeof item === 'object' ? item as Record<string, unknown> : {};
-        return { name: typeof v.name === 'string' ? v.name : '', type: typeof v.type === 'string' ? v.type : 'string', lengthVar: typeof v.lengthVar === 'string' ? v.lengthVar : undefined, passToFunc: typeof v.passToFunc === 'boolean' ? v.passToFunc : undefined };
-      }).filter((v) => v.name)
+      const v = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+      return { name: typeof v.name === 'string' ? v.name : '', type: typeof v.type === 'string' ? v.type : 'string', lengthVar: typeof v.lengthVar === 'string' ? v.lengthVar : undefined, passToFunc: typeof v.passToFunc === 'boolean' ? v.passToFunc : undefined };
+    }).filter((v) => v.name)
     : [];
   const samples = Array.isArray(raw.samples)
     ? raw.samples.map((s) => { const o = s && typeof s === 'object' ? s as Record<string, unknown> : {}; return { input: typeof o.input === 'string' ? o.input : '', output: typeof o.output === 'string' ? o.output : '' }; })
@@ -84,52 +83,52 @@ function computeIoMode(problem: Problem | undefined, language: string): 'functio
 function hasHiddenDriver(problem: Problem | undefined, language: string) { return !!problem?.driverLanguages?.includes(language); }
 function getParamType(problem: Problem, param: string) { return problem.inputSpec?.find((v) => v.name === param)?.type || 'string'; }
 function getParamSpec(problem: Problem, param: string) { return problem.inputSpec?.find((v) => v.name === param); }
-function javaType(t: string) { return ({ int:'int', float:'double', bool:'boolean', string:'String', 'int[]':'int[]', 'float[]':'double[]', 'string[]':'String[]' } as Record<string,string>)[t] || 'Object'; }
-function cppType(t: string)  { return ({ int:'int', float:'double', bool:'bool', string:'string', 'int[]':'vector<int>', 'float[]':'vector<double>', 'string[]':'vector<string>' } as Record<string,string>)[t] || 'auto'; }
-function goType(t: string)   { return ({ int:'int', float:'float64', bool:'bool', string:'string', 'int[]':'[]int', 'float[]':'[]float64', 'string[]':'[]string' } as Record<string,string>)[t] || 'interface{}'; }
-function cType(t: string)    { if (t==='float') return 'double'; if (t==='bool') return 'bool'; if (t==='string') return 'char*'; if (t.endsWith('[]')) return t==='float[]'?'double*':t==='string[]'?'char**':'int*'; return 'int'; }
+function javaType(t: string) { return ({ int: 'int', float: 'double', bool: 'boolean', string: 'String', 'int[]': 'int[]', 'float[]': 'double[]', 'string[]': 'String[]' } as Record<string, string>)[t] || 'Object'; }
+function cppType(t: string) { return ({ int: 'int', float: 'double', bool: 'bool', string: 'string', 'int[]': 'vector<int>', 'float[]': 'vector<double>', 'string[]': 'vector<string>' } as Record<string, string>)[t] || 'auto'; }
+function goType(t: string) { return ({ int: 'int', float: 'float64', bool: 'bool', string: 'string', 'int[]': '[]int', 'float[]': '[]float64', 'string[]': '[]string' } as Record<string, string>)[t] || 'interface{}'; }
+function cType(t: string) { if (t === 'float') return 'double'; if (t === 'bool') return 'bool'; if (t === 'string') return 'char*'; if (t.endsWith('[]')) return t === 'float[]' ? 'double*' : t === 'string[]' ? 'char**' : 'int*'; return 'int'; }
 function defaultReturn(type: string, language: string) {
-  if (type.endsWith('[]')) { if (language==='java') return type==='int[]'?'return new int[0];':type==='float[]'?'return new double[0];':'return new String[0];'; if (language==='cpp') return 'return {};'; if (language==='go') return 'return nil'; if (language==='c') return 'return NULL;'; return 'return [];'; }
-  if (type==='bool') return language==='python'?'return False':'return false;';
-  if (type==='string') return language==='python'?"return ''":'return "";';
-  if (type==='float') return (language==='python'||language==='go')?'return 0.0':'return 0.0;';
-  return (language==='python'||language==='go')?'return 0':'return 0;';
+  if (type.endsWith('[]')) { if (language === 'java') return type === 'int[]' ? 'return new int[0];' : type === 'float[]' ? 'return new double[0];' : 'return new String[0];'; if (language === 'cpp') return 'return {};'; if (language === 'go') return 'return nil'; if (language === 'c') return 'return NULL;'; return 'return [];'; }
+  if (type === 'bool') return language === 'python' ? 'return False' : 'return false;';
+  if (type === 'string') return language === 'python' ? "return ''" : 'return "";';
+  if (type === 'float') return (language === 'python' || language === 'go') ? 'return 0.0' : 'return 0.0;';
+  return (language === 'python' || language === 'go') ? 'return 0' : 'return 0;';
 }
 function functionSignatureForLanguage(language: string, problem: Problem, driverMode: boolean) {
   const sig = problem.signature; if (!sig?.funcName) return '';
   const params = sig.params || [];
-  if (language==='python') return `def ${sig.funcName}(${params.join(', ')}):`;
-  if (language==='javascript') return `function ${sig.funcName}(${params.join(', ')})`;
-  if (language==='go') { const typed = params.map((p) => `${p} ${goType(getParamType(problem,p))}`).join(', '); return `func ${sig.funcName}(${typed}) ${goType(sig.returnType)}`; }
-  if (language==='java') { const typed = params.map((p) => `${javaType(getParamType(problem,p))} ${p}`).join(', '); const method = `public static ${javaType(sig.returnType)} ${sig.funcName}(${typed})`; return driverMode ? `class Solution { ${method} }` : method; }
-  if (language==='cpp') { const typed = params.map((p) => { const t = cppType(getParamType(problem,p)); return getParamType(problem,p).endsWith('[]')?`const ${t}& ${p}`:`${t} ${p}`; }).join(', '); return `${cppType(sig.returnType)} ${sig.funcName}(${typed})`; }
-  if (language==='c') { const typed: string[] = []; params.forEach((p) => { const spec = getParamSpec(problem,p); const t = spec?.type||'int'; typed.push(`${cType(t)} ${p}`); if (t.endsWith('[]')) typed.push(`int ${p}Size`); }); if (sig.returnType.endsWith('[]')) typed.push('int* returnSize'); return `${cType(sig.returnType)} ${sig.funcName}(${typed.join(', ')})`; }
+  if (language === 'python') return `def ${sig.funcName}(${params.join(', ')}):`;
+  if (language === 'javascript') return `function ${sig.funcName}(${params.join(', ')})`;
+  if (language === 'go') { const typed = params.map((p) => `${p} ${goType(getParamType(problem, p))}`).join(', '); return `func ${sig.funcName}(${typed}) ${goType(sig.returnType)}`; }
+  if (language === 'java') { const typed = params.map((p) => `${javaType(getParamType(problem, p))} ${p}`).join(', '); const method = `public static ${javaType(sig.returnType)} ${sig.funcName}(${typed})`; return driverMode ? `class Solution { ${method} }` : method; }
+  if (language === 'cpp') { const typed = params.map((p) => { const t = cppType(getParamType(problem, p)); return getParamType(problem, p).endsWith('[]') ? `const ${t}& ${p}` : `${t} ${p}`; }).join(', '); return `${cppType(sig.returnType)} ${sig.funcName}(${typed})`; }
+  if (language === 'c') { const typed: string[] = []; params.forEach((p) => { const spec = getParamSpec(problem, p); const t = spec?.type || 'int'; typed.push(`${cType(t)} ${p}`); if (t.endsWith('[]')) typed.push(`int ${p}Size`); }); if (sig.returnType.endsWith('[]')) typed.push('int* returnSize'); return `${cType(sig.returnType)} ${sig.funcName}(${typed.join(', ')})`; }
   return `${sig.funcName}(${params.join(', ')})`;
 }
 function buildFunctionStarter(language: string, problem?: Problem, driverMode = false) {
   if (!problem?.signature?.funcName) return '';
   const sigText = functionSignatureForLanguage(language, problem, driverMode);
   const ret = defaultReturn(problem.signature.returnType, language);
-  if (language==='python') return `${sigText}\n    # write your logic here\n    ${ret}\n`;
-  if (language==='javascript') return `${sigText} {\n  // write your logic here\n  ${ret}\n}\n`;
-  if (language==='java') { const method = functionSignatureForLanguage(language, problem, false); const body = `    ${method} {\n        // write your logic here\n        ${ret}\n    }`; return driverMode ? `class Solution {\n${body}\n}\n` : `${method} {\n    // write your logic here\n    ${ret}\n}\n`; }
-  if (language==='cpp'||language==='c'||language==='go') { const indent = language==='go'?'\t':'    '; return `${sigText} {\n${indent}// write your logic here\n${indent}${ret}\n}\n`; }
+  if (language === 'python') return `${sigText}\n    # write your logic here\n    ${ret}\n`;
+  if (language === 'javascript') return `${sigText} {\n  // write your logic here\n  ${ret}\n}\n`;
+  if (language === 'java') { const method = functionSignatureForLanguage(language, problem, false); const body = `    ${method} {\n        // write your logic here\n        ${ret}\n    }`; return driverMode ? `class Solution {\n${body}\n}\n` : `${method} {\n    // write your logic here\n    ${ret}\n}\n`; }
+  if (language === 'cpp' || language === 'c' || language === 'go') { const indent = language === 'go' ? '\t' : '    '; return `${sigText} {\n${indent}// write your logic here\n${indent}${ret}\n}\n`; }
   return '';
 }
 function starterLooksFunctionOnly(starter: string, problem: Problem | undefined, language: string) {
-  if (!starter||!problem?.signature?.funcName||!starter.includes(problem.signature.funcName)) return false;
-  const rawMarkers = ['public class Main','static void main','int main(','func main(','readFileSync(0','Scanner sc'];
+  if (!starter || !problem?.signature?.funcName || !starter.includes(problem.signature.funcName)) return false;
+  const rawMarkers = ['public class Main', 'static void main', 'int main(', 'func main(', 'readFileSync(0', 'Scanner sc'];
   if (rawMarkers.some((m) => starter.includes(m))) return false;
-  if (language==='java'&&hasHiddenDriver(problem,language)&&!starter.includes('class Solution')) return false;
+  if (language === 'java' && hasHiddenDriver(problem, language) && !starter.includes('class Solution')) return false;
   return true;
 }
 
 function verdictLabel(verdict?: string) {
   switch (verdict) {
-    case 'AC':  return 'Accepted';
-    case 'WA':  return 'Wrong Answer';
-    case 'CE':  return 'Compilation Error';
-    case 'RE':  return 'Runtime Error';
+    case 'AC': return 'Accepted';
+    case 'WA': return 'Wrong Answer';
+    case 'CE': return 'Compilation Error';
+    case 'RE': return 'Runtime Error';
     case 'TLE': return 'Time Limit Exceeded';
     case 'UNSUPPORTED_LANGUAGE': return 'Unsupported Language';
     case 'ENGINE_ERROR': return 'Judge Error';
@@ -145,6 +144,8 @@ interface MatchState {
 
 /* ─── Main DuelPage ─────────────────────────────────────────────────── */
 export default function DuelPage() {
+
+
   const { user, loading } = useAuth();
   const router = useRouter();
   const params = useParams();
@@ -174,6 +175,19 @@ export default function DuelPage() {
   const [phaseFlash, setPhaseFlash] = useState(false);
   const [tabWarningMessage, setTabWarningMessage] = useState('');
 
+
+  useEffect(() => {
+    if (!match) return;
+
+    try {
+      localStorage.setItem(`duel:${matchId}:language`, language);
+      localStorage.setItem(`duel:${matchId}:code:${language}`, code)
+    } catch (error) {
+      console.log('could not save it')
+    }
+  }, [match, matchId, language, code])
+
+  
   const loadStarterCode = useCallback((lang: string, problem?: Problem) => {
     const ioMode = computeIoMode(problem, lang);
     const key = ioMode === 'function' ? `${lang}_practice` : lang;
@@ -205,8 +219,24 @@ export default function DuelPage() {
     setLoadError('');
     if (!matchInitialized.current) {
       matchInitialized.current = true;
+      let savedLanguage = matchLanguage;
+      let savedCode: string | null = null;
+
+      try {
+        savedLanguage = localStorage.getItem(`duel:${matchId}:language`) || matchLanguage
+
+        savedCode = localStorage.getItem(`duel:${matchId}:code:${savedLanguage}`)
+      } catch {
+
+      }
       setLanguage(matchLanguage);
-      loadStarterCode(matchLanguage, m.problem);
+      if (savedCode !== null) {
+        setCode(savedCode);
+        prevCodeLen.current = savedCode.length
+      } else {
+        loadStarterCode(matchLanguage, m.problem);
+      }
+
     }
     const now = Date.now();
     const status = data.status as string | undefined;
@@ -240,12 +270,27 @@ export default function DuelPage() {
     } catch { /* ignore */ }
   }, [matchId, fetchMatchResult]);
 
+  useEffect(() => {
+    if (!user) return
+    const handleOnline = () => {
+      syncMatchDetails().catch(console.error)
+    }
+
+    window.addEventListener('online', handleOnline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+    }
+
+  }, [user, syncMatchDetails])
+
+
   useEffect(() => { if (!loading && !user) router.push('/login'); }, [user, loading, router]);
 
   useEffect(() => {
     if (!user) return;
     const token = localStorage.getItem('accessToken');
-    if (token) wsClient.connect(token).catch(() => {});
+    if (token) wsClient.connect(token).catch(() => { });
     const loadMatch = async () => {
       let loadedFromStorage = false;
       const stored = sessionStorage.getItem(`match:${matchId}`);
@@ -274,9 +319,9 @@ export default function DuelPage() {
     return () => { unsubFound(); unsubCoding(); unsubProgress(); unsubFinished(); };
   }, [user, matchId, initMatch, fetchMatchResult]);
 
-  useEffect(() => { if (!match || phase === 'finished') return; const id = setInterval(() => syncMatchDetails().catch(() => {}), 5000); return () => clearInterval(id); }, [match, phase, syncMatchDetails]);
-  useEffect(() => { if (phase !== 'finished' && !results && match && match.codingEndsAt > 0 && Date.now() >= match.codingEndsAt) { const id = setTimeout(() => fetchMatchResult().catch(() => {}), 0); return () => clearTimeout(id); } }, [phase, results, match, fetchMatchResult]);
-  useEffect(() => { if (!submitted || results || phase === 'finished') return; const id = setInterval(() => fetchMatchResult().catch(() => {}), 2000); return () => clearInterval(id); }, [submitted, results, phase, fetchMatchResult]);
+  useEffect(() => { if (!match || phase === 'finished') return; const id = setInterval(() => syncMatchDetails().catch(() => { }), 5000); return () => clearInterval(id); }, [match, phase, syncMatchDetails]);
+  useEffect(() => { if (phase !== 'finished' && !results && match && match.codingEndsAt > 0 && Date.now() >= match.codingEndsAt) { const id = setTimeout(() => fetchMatchResult().catch(() => { }), 0); return () => clearTimeout(id); } }, [phase, results, match, fetchMatchResult]);
+  useEffect(() => { if (!submitted || results || phase === 'finished') return; const id = setInterval(() => fetchMatchResult().catch(() => { }), 2000); return () => clearInterval(id); }, [submitted, results, phase, fetchMatchResult]);
 
   const handleLanguageChange = (lang: string) => { setLanguage(lang); if (match) loadStarterCode(lang, match.problem); };
   const handleTabSwitch = useCallback(() => {
@@ -400,7 +445,7 @@ export default function DuelPage() {
 
         <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] bg-[var(--panel)] px-4 lg:px-5">
           <div className="flex min-w-0 items-center gap-3 font-mono text-[11px]"><Link href="/dashboard" className="flex h-7 w-7 shrink-0 items-center justify-center border border-[var(--accent)] text-[var(--accent)] no-underline">&gt;_</Link><span className="font-semibold text-[var(--text)]">DuecIt</span><span className="hidden text-[var(--text-faint)] sm:inline">/ arena / live</span><span className="hidden border-l border-[var(--border)] pl-3 text-[var(--accent)] md:inline">DSA-014</span><span className="truncate text-[var(--text)]">{match.problem.title}</span><span className="hidden border-l border-[var(--border)] pl-3 text-[var(--text-muted)] lg:inline">opponent <span className="text-[var(--text)]">{match.opponent.username}</span> <span className={ratingClass(match.opponent.rating)}>{match.opponent.rating}</span></span></div>
-          <div className="flex shrink-0 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em]">{tabWarnings > 0 && <span className="hidden items-center gap-1 border border-[var(--warning)] px-2 py-2 text-[var(--warning)] sm:flex"><AlertTriangle size={11} /> {tabWarnings}</span>}{opponentProgress && <span className="hidden border border-[var(--border)] px-2 py-2 text-[var(--text-muted)] md:inline">opponent / {opponentProgress}</span>}{submitted && <span className="hidden items-center gap-1 border border-[var(--accent)] px-2 py-2 text-[var(--accent)] sm:flex"><Check size={11} /> submitted</span>}<span className={`flex items-center gap-2 border px-2 py-2 ${phase === 'reading' ? 'border-[var(--warning)] text-[var(--warning)]' : 'border-[var(--accent)] text-[var(--accent)]'}`}><span>{phase === 'reading' ? 'read' : 'code'}</span>{phase === 'reading' ? <MatchTimer serverTime={match.serverTime} targetTime={match.codingStartsAt} label="Read" onExpire={() => setPhase('coding')} /> : <MatchTimer serverTime={match.serverTime} targetTime={match.codingEndsAt} label="Code" onExpire={() => { setRunResult('Time up. Waiting for result…'); fetchMatchResult().catch(() => {}); }} />}</span></div>
+          <div className="flex shrink-0 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em]">{tabWarnings > 0 && <span className="hidden items-center gap-1 border border-[var(--warning)] px-2 py-2 text-[var(--warning)] sm:flex"><AlertTriangle size={11} /> {tabWarnings}</span>}{opponentProgress && <span className="hidden border border-[var(--border)] px-2 py-2 text-[var(--text-muted)] md:inline">opponent / {opponentProgress}</span>}{submitted && <span className="hidden items-center gap-1 border border-[var(--accent)] px-2 py-2 text-[var(--accent)] sm:flex"><Check size={11} /> submitted</span>}<span className={`flex items-center gap-2 border px-2 py-2 ${phase === 'reading' ? 'border-[var(--warning)] text-[var(--warning)]' : 'border-[var(--accent)] text-[var(--accent)]'}`}><span>{phase === 'reading' ? 'read' : 'code'}</span>{phase === 'reading' ? <MatchTimer serverTime={match.serverTime} targetTime={match.codingStartsAt} label="Read" onExpire={() => setPhase('coding')} /> : <MatchTimer serverTime={match.serverTime} targetTime={match.codingEndsAt} label="Code" onExpire={() => { setRunResult('Time up. Waiting for result…'); fetchMatchResult().catch(() => { }); }} />}</span></div>
         </header>
 
         <div className={`flex min-h-8 shrink-0 items-center justify-between border-b px-4 font-mono text-[10px] uppercase tracking-[0.12em] ${editorLocked ? 'border-[var(--warning)] bg-[var(--warning-soft)] text-[var(--warning)]' : 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'}`}><span>{editorLocked ? '▣ read phase / editor locked' : '⌁ coding phase / live sync'}</span><span className="hidden sm:inline">{editorLocked ? '00:45 elapsed' : 'transition complete · 08:32 remaining'}</span></div>
@@ -424,14 +469,14 @@ export default function DuelPage() {
 /* ─── Result Screen ──────────────────────────────────────────────────── */
 function ResultsView({ results, onBack }: { results: Record<string, unknown>; onBack: () => void }) {
   const [showWinnerCode, setShowWinnerCode] = useState(false);
-  const [showLoserCode, setShowLoserCode]   = useState(false);
+  const [showLoserCode, setShowLoserCode] = useState(false);
   const [confetti, setConfetti] = useState(true);
 
   const isDraw = results.draw as boolean;
   const winner = results.winner as Record<string, unknown> | undefined;
-  const loser  = results.loser  as Record<string, unknown> | undefined;
+  const loser = results.loser as Record<string, unknown> | undefined;
   const winnerRatingChange = (winner?.ratingChange as number) ?? 0;
-  const loserRatingChange  = (loser?.ratingChange  as number) ?? 0;
+  const loserRatingChange = (loser?.ratingChange as number) ?? 0;
   const isRated = winnerRatingChange !== 0 || loserRatingChange !== 0;
 
   useEffect(() => { const t = setTimeout(() => setConfetti(false), 3500); return () => clearTimeout(t); }, []);
@@ -447,7 +492,7 @@ function ResultsView({ results, onBack }: { results: Record<string, unknown>; on
               animate={{ y: '110vh', opacity: 0 }}
               transition={{ duration: Math.random() * 2 + 1.5, delay: Math.random() * 0.8, ease: 'easeIn' }}
               className="absolute w-2 h-2 rounded-full"
-              style={{ background: ['#3B82F6','#8B5CF6','#22C55E','#F59E0B','#EF4444'][i % 5] }}
+              style={{ background: ['#3B82F6', '#8B5CF6', '#22C55E', '#F59E0B', '#EF4444'][i % 5] }}
             />
           ))}
         </div>
@@ -457,11 +502,10 @@ function ResultsView({ results, onBack }: { results: Record<string, unknown>; on
 
         {/* Outcome hero */}
         <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.5 }}
-          className={`rounded-3xl p-10 text-center mb-6 border ${
-            isDraw
+          className={`rounded-3xl p-10 text-center mb-6 border ${isDraw
               ? 'bg-[var(--bg-card)] border-[color-mix(in_srgb,var(--warning)_20%,transparent)] shadow-[0_0_60px_rgba(245,158,11,0.06)]'
               : 'bg-gradient-to-br from-[#111827] to-[#0D1117] border-[color-mix(in_srgb,var(--primary)_20%,transparent)] shadow-[0_0_60px_rgba(59,130,246,0.08)]'
-          }`}>
+            }`}>
           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
             className="text-5xl mb-4">{isDraw ? '🤝' : '🏆'}</motion.div>
           <motion.h1 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
@@ -543,7 +587,7 @@ function ResultsView({ results, onBack }: { results: Record<string, unknown>; on
         {/* Solutions */}
         {[
           { player: winner, show: showWinnerCode, setShow: setShowWinnerCode },
-          { player: loser,  show: showLoserCode,  setShow: setShowLoserCode  },
+          { player: loser, show: showLoserCode, setShow: setShowLoserCode },
         ].filter(({ player }) => player && Boolean(player.code)).map(({ player, show, setShow }, idx) => (
           <motion.div key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 + idx * 0.1 }}
             className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden mb-4">

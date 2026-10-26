@@ -203,7 +203,6 @@ func (h *Handlers) MyMatchHistory(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, "Match history", matches)
 }
 
-// --- Match ---
 
 type joinQueueReq struct {
 	Category   string `json:"category"`

@@ -886,14 +886,18 @@ func (m *Manager) StartRecoveryPoller(ctx context.Context) {
 		}
 	}()
 }
-
+//current funciton for match recovery after disconection 
+//for gracefull reconnection i need to let redis open for some time and let the redislock open 
 func (m *Manager) recoverActiveMatches(ctx context.Context) {
 	cur, err := m.matches.Find(ctx, bson.M{"status": models.MatchStatusActive})
 	if err != nil {
 		return
 	}
 	defer cur.Close(ctx)
-
+   
+	if err=nill{
+		continue
+	}
 	for cur.Next(ctx) {
 		var match models.Match
 		if err := cur.Decode(&match); err != nil {
@@ -918,6 +922,7 @@ func (m *Manager) recoverActiveMatches(ctx context.Context) {
 		}
 	}
 }
+//first i need to keep the state fof the match stored in cache so it will contain both tokens and state which can help me in driving throught the disconnected match if the user is authenticated
 
 func (m *Manager) GetMatchResult(ctx context.Context, matchID, userID primitive.ObjectID) (*MatchResult, error) {
 	match, err := m.GetMatch(ctx, matchID)

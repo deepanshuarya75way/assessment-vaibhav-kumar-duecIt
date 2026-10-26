@@ -284,6 +284,15 @@ export default function DuelPage() {
 
   }, [user, syncMatchDetails])
 
+  useEffect(()=>{
+    if(!match || phase==='finished') return
+
+    const id = setInterval(()=>{
+      syncMatchDetails().catch(()=>{})
+    },5000)
+    return()=> clearInterval(id);
+  },[match,phase,syncMatchDetails])
+
 
   useEffect(() => { if (!loading && !user) router.push('/login'); }, [user, loading, router]);
 
